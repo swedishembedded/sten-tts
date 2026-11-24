@@ -111,5 +111,5 @@ evaluate:
     failure_rate_max: 0.02             # clips that hit the length cap, are silent or loop
 
 publish:
-  repo: swedishembedded/sten-tts-1.7b
+  repo: swedishembedded/sten-tts          # the local mirror of this repository is given to `publish --hub-dir`
   private: true
