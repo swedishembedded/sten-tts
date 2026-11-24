@@ -75,8 +75,11 @@ def _eligible(u: Utt, sel: dict) -> str | None:
     if not norm_text(u.text):
         return "no_text"
     if u.source == "nst":
-        if len(norm_text(u.text).split()) < sel["nst"]["min_words"]:
+        words = norm_text(u.text).split()
+        if len(words) < sel["nst"]["min_words"]:
             return "too_few_words"
+        if sum(len(w) == 1 for w in words) * 2 >= len(words):
+            return "spelled"  # NST's letter-by-letter items: a spelling task, not a sentence
         if u.gender not in ("female", "male"):
             return "gender_unspecified"
     if u.source == "rixvox":

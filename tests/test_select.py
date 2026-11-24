@@ -36,6 +36,8 @@ def _inventory(root: Path) -> None:
         for k in range(40 + si):  # speakers differ in how much they recorded
             rows.append({"source": "nst", "id": f"nst:{si}:{k}", "file": "f", "row": k, "speaker": f"nst:{si}", "gender": gender, "age": "30",
                          "region": region, "text": f"mening nummer {k % 50} av talare {si % 7}", "duration": 4.0, "quality": None})
+    rows.append({"source": "nst", "id": "nst:spelled", "file": "f", "row": 999, "speaker": "nst:0", "gender": "female", "age": "30",
+                 "region": REGIONS[0], "text": "K O N T R O L L", "duration": 4.0, "quality": None})
     for si in range(20):
         for k in range(30):
             q = json.dumps({"wer_whisper": 0.05 if k % 5 else 0.5, "lang_prob_sv": 0.99, "is_silence": False, "year": 2023})
@@ -76,6 +78,7 @@ def test_held_out_sets_are_disjoint_from_training(work: config.Workdir) -> None:
     assert banned not in train_texts, "an evaluation text never trains"
     voice_test = [r for r in rows if r["split"] == "voice_test"]
     assert voice_test and not {select.norm_text(r["text"]) for r in voice_test} & train_texts
+    assert "nst:spelled" not in {r["id"] for r in rows}, "letter-by-letter items are not sentences"
 
 
 def test_voices_are_distinct_speakers_matching_their_spec(work: config.Workdir) -> None:
