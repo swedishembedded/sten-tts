@@ -1,0 +1,115 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# The Sten-TTS-1.7B recipe: every input pinned, every choice written down.
+# Paths are relative to the work directory each stage is given (--workdir).
+
+name: sten-tts-1.7b
+seed: 20261125            # selection, splits and training draws; change it and you get another, equally valid run
+
+base:
+  repo: Qwen/Qwen3-TTS-12Hz-1.7B-Base
+  revision: fd4b254389122332181a7c3db7f27e918eec64e3
+  license: Apache-2.0
+
+judge:                    # the recogniser that scores intelligibility; never trained here
+  repo: Qwen/Qwen3-ASR-1.7B
+  revision: 7278e1e70fe206f11671096ffdd38061171dd6e5
+
+language:
+  name: swedish           # the codec language row the release adds (config: talker_config.codec_language_id)
+  init_from: [german, english]   # the new row starts as the mean of these rows of the base
+
+sources:
+  nst:
+    repo: KTH/nst
+    revision: d3c2c6283b824266b4a6fac10b7b9aae3bad4293
+    license: CC0-1.0
+    files: "train/data-*.arrow"       # all 101 shards (44 GB): audio and metadata share the files
+    format: arrow-stream
+  rixvox:
+    repo: KBLab/rixvox-v2
+    revision: 1f5f37f5ec8740eae318eeae7bf190074454d0d1
+    license: ODC-BY-1.0
+    attribution: >-
+      Contains information from the dataset RixVox-v2 (https://huggingface.co/datasets/KBLab/rixvox-v2),
+      made available under the ODC Attribution License, sourced from the Swedish Parliament's open data.
+    files: [920, 943]                 # shard range data/rixvox_0920 .. 0943: the most recent debates
+    format: parquet
+  fleurs:
+    repo: google/fleurs
+    revision: 70bb2e84b976b7e960aa89f1c648e09c59f894dd
+    license: CC-BY-4.0
+    files: "data/sv_se/*"             # evaluation texts and reference audio only; never trained on
+    format: fleurs
+
+selection:
+  hours: 100.0                         # accepted training audio after every filter
+  share: {nst: 0.75, rixvox: 0.25}
+  oversample: 1.15                     # select this much more before the audio filters drop clips
+  duration_seconds: {min: 1.5, max: 30.0}     # RixVox segments run to 30 s; 30 s is 375 frames
+  nst:
+    cap_minutes_per_speaker: 8.0       # auxiliary speakers; the named voices take all their clean audio
+    min_words: 3
+  rixvox:
+    cap_minutes_per_speaker: 20.0
+    max_wer_whisper: 0.10              # the protocol text and Whisper's transcript agree
+    min_lang_prob_sv: 0.98
+    text: whisper_transcription        # verbatim; the protocol text is edited for print
+  held_out:
+    unseen_speakers: {nst: 12, rixvox: 6}   # whole speakers kept out of training
+    voice_test_utterances: 20               # per named voice, unseen texts
+    validation_fraction: 0.02               # of the training speakers' utterances, for checkpoint choice
+
+audio:
+  silence_trim_db: -40.0               # trim leading/trailing audio below this level ...
+  keep_margin_seconds: 0.15            # ... keeping this much of it
+  max_clipped_fraction: 0.001
+  min_snr_db: 15.0
+  min_rms_dbfs: -40.0
+
+# Twelve named voices, each an NST speaker chosen by `select` (the one with the most clean
+# audio in its region and gender, ties broken by the seed). NST has no Finland Swedish
+# speakers, so the last pair is Dalarna's.
+voices:
+  - {name: astrid, gender: female, region: Mellansverige}
+  - {name: erik,   gender: male,   region: Mellansverige}
+  - {name: linnea, gender: female, region: Stockholm med omnejd}
+  - {name: viktor, gender: male,   region: Stockholm med omnejd}
+  - {name: elsa,   gender: female, region: Göteborg med omnejd}
+  - {name: oskar,  gender: male,   region: Göteborg med omnejd}
+  - {name: maja,   gender: female, region: Västra sydsverige}
+  - {name: nils,   gender: male,   region: Västra sydsverige}
+  - {name: signe,  gender: female, region: Norrland}
+  - {name: arvid,  gender: male,   region: Norrland}
+  - {name: ingrid, gender: female, region: Dalarna med omnejd}
+  - {name: axel,   gender: male,   region: Dalarna med omnejd}
+
+train:
+  install_as: swedishembedded/sten-tts-1.7b
+  resume_key: sten-tts-1.7b-v1
+  epochs: 3
+  lr: 1.0e-5
+  weight_decay: 0.01
+  warmup_fraction: 0.05
+  batch_utterances: 16
+  grad_accum: 2
+  max_frames: 375                      # 30 s at 12.5 Hz
+  mtp_weight: 0.3
+  streaming_fraction: 0.5              # half the records in each text layout the release serves
+  lr_multipliers: {new_rows: 5.0}
+  checkpoint_every: 500
+
+evaluate:
+  fleurs_sentences: 200                # FLEURS sv_se test sentences, read by every voice
+  seeds: [1, 2]
+  gates:                               # the release passes only if every gate holds
+    cer_max: 0.08                      # mean recogniser CER over every voice and sentence
+    cer_better_than_base: true         # below the base model's CER on the same texts (paired)
+    voice_similarity_min: 0.60         # speaker-encoder cosine to the voice's own held-out recordings
+    voice_identity_accuracy_min: 0.90  # nearest-voice identification among the twelve
+    failure_rate_max: 0.02             # clips that hit the length cap, are silent or loop
+
+publish:
+  repo: swedishembedded/sten-tts-1.7b
+  private: true

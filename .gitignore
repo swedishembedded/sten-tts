@@ -1,0 +1,6 @@
+# Run state lives in the work directory given to every stage, never here.
+/work/
+__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/
