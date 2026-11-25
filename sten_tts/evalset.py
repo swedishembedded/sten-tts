@@ -7,8 +7,8 @@
 
 """The evaluation sentences: FLEURS sv_se test transcripts, chosen by the seed.
 
-FLEURS is never trained on; its sentences are also banned from the training
-selection by their normalised text.
+The FLEURS test split is never trained on; its sentences are also banned from
+the training selection by their normalised text.
 """
 
 from __future__ import annotations
@@ -38,16 +38,13 @@ def fleurs_sentences(recipe: Recipe, work: Workdir) -> list[dict]:
 
 
 def all_eval_texts(recipe: Recipe, work: Workdir) -> set[str]:
-    """Every FLEURS sv_se sentence (all splits), normalised: none of them may be trained on."""
-    out = set()
-    for split in ("train", "dev", "test"):
-        path = work.raw("fleurs") / "data" / "sv_se" / f"{split}.tsv"
-        if path.exists():
-            with path.open(encoding="utf-8") as fh:
-                out |= {norm_text(r[2]) for r in csv.reader(fh, delimiter="\t", quoting=csv.QUOTE_NONE) if len(r) > 2}
-    if not out:
-        raise RuntimeError("no FLEURS sv_se transcripts fetched; run the fetch stage")
-    return out
+    """Every FLEURS sv_se test sentence, normalised: none of them may be trained on. (FLEURS train
+    and dev are training material in v2; their sentences are disjoint from the test split's.)"""
+    path = work.raw("fleurs") / "data" / "sv_se" / "test.tsv"
+    if not path.exists():
+        raise RuntimeError(f"{path}: not fetched; run the fetch stage")
+    with path.open(encoding="utf-8") as fh:
+        return {norm_text(r[2]) for r in csv.reader(fh, delimiter="\t", quoting=csv.QUOTE_NONE) if len(r) > 2}
 
 
 def write(recipe: Recipe, work: Workdir) -> None:

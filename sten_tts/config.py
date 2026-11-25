@@ -66,7 +66,7 @@ def load(path: str | Path) -> Recipe:
     _require(raw, _TOP, str(path), optional=_OPTIONAL_TOP)
     for name in ("base", "judge"):
         _require(raw[name], {"repo", "revision"}, f"{path}: {name}", optional={"license", "served_as"})
-    _require(raw["language"], {"name", "init_from"}, f"{path}: language")
+    _require(raw["language"], {"name", "init_from"}, f"{path}: language", optional={"base_languages"})
     for src, spec in raw["sources"].items():
         _require(spec, {"repo", "revision", "license", "files", "format"}, f"{path}: sources.{src}", optional={"attribution"})
         if len(spec["revision"]) != 40:
@@ -83,9 +83,20 @@ def load(path: str | Path) -> Recipe:
         _require(live, {"min_minutes", "utterances", "weights"}, f"{path}: liveliness")
         _require(live["weights"], {"f0_range", "f0_sd", "energy_sd", "syllable_rate"}, f"{path}: liveliness.weights")
     sel = raw["selection"]
-    _require(sel, {"hours", "share", "oversample", "duration_seconds", "nst", "rixvox", "held_out"}, f"{path}: selection")
+    if not isinstance(sel, dict) or not isinstance(sel.get("share"), dict):
+        raise RecipeError(f"{path}: selection.share must be a mapping of source to share")
+    # One block per source that has a share, with at least its per-speaker cap.
+    _require(sel, {"hours", "share", "oversample", "duration_seconds", "held_out", *sel["share"]}, f"{path}: selection")
     if abs(sum(sel["share"].values()) - 1.0) > 1e-9:
         raise RecipeError(f"{path}: selection.share must sum to 1, got {sel['share']}")
+    for src in sel["share"]:
+        if src not in raw["sources"]:
+            raise RecipeError(f"{path}: selection.share names {src!r}, which is not a source")
+        if "cap_minutes_per_speaker" not in sel[src]:
+            raise RecipeError(f"{path}: selection.{src}: missing keys ['cap_minutes_per_speaker']")
+    unknown = set(sel["held_out"]["unseen_speakers"]) - set(sel["share"])
+    if unknown:
+        raise RecipeError(f"{path}: selection.held_out.unseen_speakers: {sorted(unknown)} have no share")
     names = [v["name"] for v in raw["voices"]]
     if len(set(names)) != len(names):
         raise RecipeError(f"{path}: voices: duplicate names in {names}")

@@ -21,6 +21,7 @@ judge:                    # the recogniser that scores intelligibility; never tr
 language:
   name: swedish           # the codec language row the release adds (config: talker_config.codec_language_id)
   init_from: [german, english]   # the new row starts as the mean of these rows of the base
+  base_languages: [english]      # rows of the base the corpus also trains (LibriTTS-R), so English words stay English
 
 sources:
   nst:
@@ -74,22 +75,30 @@ liveliness:               # stage `voices`: the liveliest NST speaker of each vo
   weights: {f0_range: 0.35, f0_sd: 0.25, energy_sd: 0.25, syllable_rate: 0.15}   # of the z-scores among the same gender
 
 selection:
-  hours: 100.0                         # accepted training audio after every filter
-  share: {nst: 0.75, rixvox: 0.25}
-  oversample: 1.15                     # select this much more before the audio filters drop clips
+  hours: 420.0                         # accepted training audio after every filter (the shards are cut at exactly this)
+  # Shares of the hours: NST ~189 h, RixVox ~147 h, LibriVox ~34 h, FLEURS train+dev all of its ~8 h,
+  # LibriTTS-R English ~42 h (10 %). A source that runs short leaves its shortfall to the others, in this order.
+  share: {nst: 0.45, rixvox: 0.35, librivox: 0.08, fleurs: 0.02, libritts_r: 0.10}
+  oversample: 1.10                     # select this much more before the audio filters drop clips
   duration_seconds: {min: 1.5, max: 30.0}     # RixVox segments run to 30 s; 30 s is 375 frames
   nst:
-    cap_minutes_per_speaker: 8.0       # auxiliary speakers; the named voices take all their clean audio
+    cap_minutes_per_speaker: 15.0      # auxiliary speakers; the named voices take all their clean audio
     min_words: 3
   rixvox:
     cap_minutes_per_speaker: 20.0
     max_wer_whisper: 0.10              # the protocol text and Whisper's transcript agree
     min_lang_prob_sv: 0.98
     text: whisper_transcription        # verbatim; the protocol text is edited for print
+  librivox:
+    cap_minutes_per_speaker: 300.0     # a LibriVox speaker is one audiobook's reader; nine books
+  fleurs:
+    cap_minutes_per_speaker: 1.0       # FLEURS names no readers: every recording is its own speaker
+  libritts_r:
+    cap_minutes_per_speaker: 12.0      # 247 speakers
   held_out:
-    unseen_speakers: {nst: 12, rixvox: 6}   # whole speakers kept out of training
+    unseen_speakers: {nst: 12, rixvox: 6, librivox: 1, libritts_r: 4}   # whole speakers kept out of training
     voice_test_utterances: 20               # per named voice, unseen texts
-    validation_fraction: 0.02               # of the training speakers' utterances, for checkpoint choice
+    validation_fraction: 0.01               # of the training speakers' utterances, for checkpoint choice
 
 audio:
   silence_trim_db: -40.0               # trim leading/trailing audio below this level ...

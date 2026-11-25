@@ -43,7 +43,7 @@ def request(recipe: Recipe, work: Workdir) -> dict:
     lang = recipe["language"]
     return {
         "base": recipe["base"]["repo"],
-        "languages": json.dumps({lang["name"]: {"new": True, "init_from": lang["init_from"]}}),
+        "languages": json.dumps({lang["name"]: {"new": True, "init_from": lang["init_from"]}, **{b: {"new": False} for b in lang.get("base_languages", [])}}),
         "voices": json.dumps({v["name"]: {"new": True} for v in recipe["voices"]}),
         "steps": steps,
         "lr": t["lr"],

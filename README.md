@@ -143,7 +143,7 @@ it. The request `train` builds from the recipe is:
   "action": "speech_sft",
   "params": {
     "base": "Qwen/Qwen3-TTS-12Hz-1.7B-Base",
-    "languages": "{\"swedish\": {\"new\": true, \"init_from\": [\"german\", \"english\"]}}",
+    "languages": "{\"swedish\": {\"new\": true, \"init_from\": [\"german\", \"english\"]}, \"english\": {\"new\": false}}",
     "voices": "{\"astrid\": {\"new\": true}, \"erik\": {\"new\": true}, ...}",
     "steps": 5560,
     "lr": 1e-05,
@@ -262,26 +262,33 @@ Each stage is also `python -m sten_tts.cli <stage> --workdir DIR` (see
 
 ### Selection, in short
 
-`select` is a pure function of the inventories, the FLEURS transcripts and the
-recipe's seed; rerunning it gives a byte-identical selection. It:
+`select` is a pure function of the inventories, the voices stage's choice, the
+evaluation sentences and the recipe's seed; rerunning it gives a
+byte-identical selection. With the v2 recipe it:
 
 - keeps NST read sentences of at least three words (no letter-by-letter
-  spelling items) and RixVox segments whose protocol text and Whisper transcript
-  agree (WER at most 0.10), Swedish with probability at least 0.98, using the
-  verbatim Whisper transcript;
+  spelling items), RixVox segments whose protocol text and Whisper transcript
+  agree (WER at most 0.10, Swedish with probability at least 0.98, the verbatim
+  Whisper transcript), the LibriVox segments that `segment` checked, FLEURS
+  train and dev, and LibriTTS-R English (language `english`, never a voice);
 - keys NST speakers by recording session, because NST reuses one speaker id for
   different people;
-- picks each voice as the NST speaker with the most eligible audio in its gender
-  and region;
-- holds out whole speakers (balanced by gender), 20 sentences per voice, and
-  bans every FLEURS sentence and every held-out text from training;
-- fills 75 % NST and 25 % RixVox with at most 8 (NST) or 20 (RixVox) minutes per
-  auxiliary speaker, round-robin over gender and region, then oversamples by
-  15 % so the audio filters can drop clips and the shards are cut at exactly
-  100 h.
+- takes each voice from `selection/voices.json` (the liveliest NST speaker of
+  its gender and region with at least 20 minutes, see `voices`);
+- holds out whole speakers per source (spread over genders, drawn among the
+  speakers with at most the median audio), 20 sentences per voice, and bans
+  every FLEURS test sentence, every committed evaluation sentence and every
+  held-out text from training;
+- fills each source's share of 420 h (NST 45 %, RixVox 35 %, LibriVox 8 %,
+  FLEURS 2 %, LibriTTS-R 10 %) with a per-speaker cap (15 min NST, 20 min
+  RixVox, 5 h a LibriVox book, 12 min LibriTTS-R), round-robin over gender and
+  region; a source that runs short leaves its shortfall to the others; then
+  oversamples by 10 % so the audio filters can drop clips and the shards are
+  cut at exactly 420 h; 1 % of the training speakers' utterances validate.
 
-`selection/report.json` lists hours per split, source, gender and region, every
-voice's speaker and hours, and every rejection reason with its count.
+`selection/report.json` lists hours per split, source, language, gender and
+region, speakers per source, every voice's speaker and hours, and every
+rejection reason with its count.
 
 ## Checking the result
 

@@ -101,7 +101,8 @@ def build(recipe: Recipe, work: Workdir, pool: BrainPool, concurrency: int) -> d
     pool.require_model(model, "encode")
     meta = {r["id"]: r for r in pq.read_table(work.selection / "selection.parquet").to_pylist()}
     voices = [v["name"] for v in recipe["voices"]]
-    language = recipe["language"]["name"]
+    # The new language first, then the base's own languages the corpus also trains (English).
+    languages = [recipe["language"]["name"], *recipe["language"].get("base_languages", [])]
     cache = work.shards / "cache"
     cache.mkdir(parents=True, exist_ok=True)
     report = {}
@@ -124,17 +125,18 @@ def build(recipe: Recipe, work: Workdir, pool: BrainPool, concurrency: int) -> d
             raise RuntimeError(f"{split}: clips were encoded by different models ({sorted(producers)}); delete {cache} and encode again")
         first = enc[clips[0]["id"]]
         writer = ShardWriter(codebooks=first["codebooks"], codebook_size=2048, xvector_dim=len(first["xvector"]) // 4, frame_rate=first["frame_rate"],
-                             languages=[language], voices=voices,
+                             languages=languages, voices=voices,
                              producers={**json.loads(first["producers"]), "model": f"{model}@{recipe['base']['revision']}", "recipe": recipe.name})
         frames = 0
         for c in clips:
             e, m = enc[c["id"]], meta[c["id"]]
             writer.push(id={"id": c["id"], "speaker": m["speaker"], "source": m["source"], "text": m["text"]},
                         text_ids=np.frombuffer(e["text_ids"], "<u4"), codes=np.frombuffer(e["codes"], "<u2"), xvector=np.frombuffer(e["xvector"], "<f4"),
-                        voice=m["voice"], language=language, complete=True)
+                        voice=m["voice"], language=m.get("language") or languages[0], complete=True)
             frames += e["frames"]
         writer.write(out_path)
         report[split] = {"records": len(writer), "frames": frames, "hours": round(sum(c["seconds"] for c in clips) / 3600, 3),
+                         "hours_per_language": {lang: round(sum(c["seconds"] for c in clips if (meta[c["id"]].get("language") or languages[0]) == lang) / 3600, 3) for lang in languages},
                          "voices": {v: sum(1 for c in clips if meta[c["id"]]["voice"] == v) for v in voices}}
         (work.shards / f"{split}.json").write_text(json.dumps(report[split], indent=1))
     return report
