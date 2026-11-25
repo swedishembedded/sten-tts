@@ -16,6 +16,8 @@ JOBS ?= 16
 CONCURRENCY ?= 8
 HUB_DIR ?=
 ARTIFACTS ?=
+SPLINTER ?=
+RANKS ?= 1
 UPSTREAM_PYTHON ?=
 STEN := $(PYTHON) -m sten_tts.cli
 ARGS = --workdir "$(WORKDIR)" --recipe "$(RECIPE)"
@@ -68,10 +70,14 @@ audio: check-workdir
 shards: check-workdir
 	$(STEN) shards $(ARGS) --concurrency $(CONCURRENCY)
 
-## train - the served fine-tuning job on the brain server, and the release directory
+## train - the served fine-tuning job (one brain server, or with SPLINTER=... RANKS=N every card of a fabric), and the release directory
 train: check-workdir
-	@test -n "$(ARTIFACTS)" || { echo "set ARTIFACTS=<the brain server's --artifact-store directory>"; exit 2; }
+ifneq ($(SPLINTER),)
+	$(STEN) train $(ARGS) --splinter "$(SPLINTER)" --ranks $(RANKS)
+else
+	@test -n "$(ARTIFACTS)" || { echo "set ARTIFACTS=<the brain server's --artifact-store directory>, or SPLINTER=<splinter command> to train over a fabric"; exit 2; }
 	$(STEN) train $(ARGS) --artifact-store "$(ARTIFACTS)"
+endif
 
 ## evaluate - synthesis by every voice, recognition, similarity, gates; upstream loader check
 evaluate: check-workdir

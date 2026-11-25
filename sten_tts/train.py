@@ -24,7 +24,9 @@ from __future__ import annotations
 import json
 import math
 import os
+import shlex
 import shutil
+import subprocess
 import time
 from pathlib import Path
 
@@ -35,13 +37,17 @@ from .config import Recipe, Workdir
 from .modelcard import model_card
 
 
-def request(recipe: Recipe, work: Workdir) -> dict:
-    """The job's params, all of them derived from the recipe and the shards."""
+def request(recipe: Recipe, work: Workdir, ranks: int = 1) -> dict:
+    """The job's params, all of them derived from the recipe, the shards and the ranks it trains on.
+
+    `steps` counts optimiser steps of the whole job: each step trains
+    `batch_utterances * grad_accum` utterances on every rank.
+    """
     t = recipe["train"]
     records = json.loads((work.shards / "train.json").read_text())["records"]
-    steps = math.ceil(t["epochs"] * records / (t["batch_utterances"] * t["grad_accum"]))
+    steps = math.ceil(records / (t["batch_utterances"] * t["grad_accum"] * ranks)) * t["epochs"]
     lang = recipe["language"]
-    return {
+    params = {
         "base": recipe["base"]["repo"],
         "languages": json.dumps({lang["name"]: {"new": True, "init_from": lang["init_from"]}, **{b: {"new": False} for b in lang.get("base_languages", [])}}),
         "voices": json.dumps({v["name"]: {"new": True} for v in recipe["voices"]}),
@@ -58,11 +64,13 @@ def request(recipe: Recipe, work: Workdir) -> dict:
         "new_row_lr_multiplier": t["lr_multipliers"]["new_rows"],
         "eval_every": t["eval_every"],
         "seed": recipe.seed,
-        "cards": 1,
         "install_as": t["install_as"],
-        "resume_key": t["resume_key"],
-        "checkpoint_every": t["checkpoint_every"],
     }
+    # Optional settings: selection on held-out loss, and resumable state (expensive across many ranks).
+    for key in ("eval_batches", "patience", "keep_best", "resume_key", "checkpoint_every"):
+        if key in t:
+            params[key] = t[key]
+    return params
 
 
 def _verify(path: Path, digest: str) -> None:
@@ -118,7 +126,7 @@ def run(recipe: Recipe, work: Workdir, pool: BrainPool, artifacts: Path, allow_c
     pool = BrainPool(pool.transport, pool.buses[:1], pool.factory)
     pool.require_model("brain/train", "speech_sft")
     brain = pool.first()
-    params = request(recipe, work)
+    params = {**request(recipe, work), "cards": 1}
     if allow_cpu:
         params["allow_cpu"] = True
     # The shards go through the artifact store by digest: a D-Bus blob is capped
@@ -145,6 +153,39 @@ def run(recipe: Recipe, work: Workdir, pool: BrainPool, artifacts: Path, allow_c
     events.close()
     files = collect(artifacts, out["checkpoint_digest"], work.release)
     report = {"request": params, "plan": plan, "result": out, "files": files, "seconds": round(time.time() - started)}
+    (work.release / "README.md").write_text(model_card(recipe, work, report))
+    (work.train / "report.json").write_text(json.dumps(report, indent=1, ensure_ascii=False))
+    return report
+
+
+def run_fleet(recipe: Recipe, work: Workdir, splinter: list[str], ranks: int) -> dict:
+    """Train through `splinter jobs run-served`: splinter starts (or reaches) the brain servers of the
+    fabric, spreads the job over every card it was given, follows it and fetches the published
+    checkpoint. `splinter` is the command with its site flags (nodes, launcher, binaries); `ranks` is
+    the number of cards it trains on, which sets the job's step count."""
+    params = request(recipe, work, ranks)
+    work.train.mkdir(parents=True, exist_ok=True)
+    (work.train / "params.json").write_text(json.dumps(params, indent=1))
+    out = work.train / "run-served"
+    shutil.rmtree(out, ignore_errors=True)
+    cmd = [*splinter, "jobs", "run-served", "--action", "speech_sft", "--params", str(work.train / "params.json"),
+           "--artifact", f"dataset_digest={work.shards / 'train.bttshrd'}",
+           "--artifact", f"held_out_digest={work.shards / 'validation.bttshrd'}", "--out", str(out)]
+    print("train:", shlex.join(cmd), flush=True)
+    started = time.time()
+    with (work.train / "events.jsonl").open("a") as events, subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True) as proc:
+        for line in proc.stdout:
+            line = line.strip()
+            if line.startswith("{"):
+                events.write(line + "\n")
+                events.flush()
+            print("train:", line, flush=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"splinter jobs run-served exited {proc.returncode}")
+    result = json.loads((out / "result.json").read_text())
+    shutil.rmtree(work.release, ignore_errors=True)
+    shutil.copytree(out, work.release, ignore=shutil.ignore_patterns("result.json"))
+    report = {"request": params, "ranks": ranks, "result": result, "seconds": round(time.time() - started)}
     (work.release / "README.md").write_text(model_card(recipe, work, report))
     (work.train / "report.json").write_text(json.dumps(report, indent=1, ensure_ascii=False))
     return report

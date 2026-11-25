@@ -125,20 +125,21 @@ voices:
   - {name: axel,   gender: male,   region: Dalarna med omnejd}
 
 train:
-  install_as: sten-tts-1.7b            # installed in brain's model store as local/sten-tts-1.7b
-  resume_key: sten-tts-1.7b-v2              # a new run: v1's key would refuse the changed request
-  epochs: 3
-  lr: 1.0e-5
+  install_as: sten-tts-1.7b-v2         # installed in brain's model store as local/sten-tts-1.7b-v2
+  epochs: 6                            # at most: held-out loss picks the checkpoint and stops the run early
+  lr: 2.0e-5                           # a global batch of 32 x ranks utterances (352 on 11 cards)
   weight_decay: 0.01
   warmup_fraction: 0.05                # of the steps, then a cosine decay
-  batch_utterances: 16
-  grad_accum: 2
+  batch_utterances: 32                 # per rank: a GH200's fastest batch at max_frames 375
+  grad_accum: 1
   max_frames: 375                      # 30 s at 12.5 Hz
   mtp_weight: 0.3
   streaming_fraction: 0.5              # half the records in each text layout the release serves
   lr_multipliers: {new_rows: 5.0}
-  checkpoint_every: 500
-  eval_every: 250                      # held-out teacher-forced loss every this many steps
+  eval_every: 100                      # held-out teacher-forced loss every this many steps
+  eval_batches: 8
+  patience: 4                          # stop once 4 evaluations in a row have not beaten the best
+  keep_best: true                      # publish the best evaluation's parameters, not the last step's
 
 evaluate:
   fleurs_sentences: 200                # FLEURS sv_se test sentences, read by every voice

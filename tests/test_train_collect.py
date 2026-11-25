@@ -56,3 +56,43 @@ def test_a_shard_is_published_by_its_digest(tmp_path: Path) -> None:
     assert d == blake3.blake3(b"shard bytes").hexdigest()
     assert (store / d).read_bytes() == b"shard bytes"
     assert train.publish_by_digest(src, store) == d and len(list(store.iterdir())) == 1
+
+
+def test_a_fleet_run_goes_through_splinter_and_becomes_the_release(tmp_path: Path) -> None:
+    """`run_fleet` runs splinter's run-served with the derived params and the shards, records its step
+    lines and turns its output directory into the release."""
+    import sys
+    from sten_tts import config
+    recipe = config.load(Path(__file__).resolve().parents[1] / "recipe" / "sten-tts-1.7b-v2.yaml")
+    work = config.Workdir(tmp_path / "work")
+    work.shards.mkdir(parents=True)
+    (work.shards / "train.json").write_text(json.dumps({"records": 3520, "hours": 1.0, "voices": {}}))
+    for f in ("train.bttshrd", "validation.bttshrd"):
+        (work.shards / f).write_bytes(b"x")
+    fake = tmp_path / "splinter.py"
+    fake.write_text(
+        "import json, sys, pathlib\n"
+        "a = sys.argv[1:]\n"
+        "assert a[:2] == ['jobs', 'run-served'] and a[a.index('--action') + 1] == 'speech_sft'\n"
+        "p = json.load(open(a[a.index('--params') + 1]))\n"
+        "out = pathlib.Path(a[a.index('--out') + 1]); out.mkdir(parents=True)\n"
+        "(out / 'config.json').write_text('{}')\n"
+        "(out / 'result.json').write_text(json.dumps({'steps': p['steps'], 'checkpoint': 'best'}))\n"
+        "print(json.dumps({'type': 'step', 'step': 1, 'steps': p['steps'], 'loss': 3.0}))\n")
+    calls = {}
+
+    def card(recipe, work, report):
+        calls["report"] = report
+        return "card"
+
+    import sten_tts.train as t
+    orig = t.model_card
+    t.model_card = card
+    try:
+        report = train.run_fleet(recipe, work, [sys.executable, str(fake)], ranks=11)
+    finally:
+        t.model_card = orig
+    assert report["request"]["steps"] == 6 * 10, "3520 records over 11 ranks of 32 is 10 steps an epoch"
+    assert (work.release / "config.json").exists() and not (work.release / "result.json").exists()
+    assert (work.release / "README.md").read_text() == "card"
+    assert json.loads((work.train / "events.jsonl").read_text().splitlines()[0])["step"] == 1

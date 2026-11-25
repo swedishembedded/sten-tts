@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import os
 from pathlib import Path
 
@@ -40,6 +41,8 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--brain-ca-file", type=Path, help="the certificate the https:// brain servers present, when not signed by a system CA")
     p.add_argument("--concurrency", type=int, default=8, help="requests in flight to the brain server")
     p.add_argument("--artifact-store", type=Path, help="train: the brain server's --artifact-store directory, where the checkpoint is published")
+    p.add_argument("--splinter", help="train: the splinter command with its site flags; the job then runs through `splinter jobs run-served` over every card splinter is given")
+    p.add_argument("--ranks", type=int, default=1, help="train with --splinter: how many cards the job trains on (sets its step count)")
     p.add_argument("--allow-cpu", action="store_true", help="train: let the fine-tune run on the CPU backend (a smoke run; far too slow for the release)")
     p.add_argument("--upstream-python", type=Path, help="evaluate: an interpreter with torch and qwen-tts, to check the release loads upstream")
     p.add_argument("--hub-dir", type=Path, help="publish, publish-dataset: a local mirror of the Hugging Face repository to copy the release (or the export) into first")
@@ -71,6 +74,9 @@ def main(argv: list[str] | None = None) -> None:
     elif a.stage == "shards":
         from . import brainclient, shards
         print(json.dumps(shards.build(recipe, work, brainclient.connect(a.brain_transport, a.brain_bus or ["session"], a.brain_key_file, a.brain_ca_file), a.concurrency), indent=1))
+    elif a.stage == "train" and a.splinter:
+        from . import train
+        print(json.dumps(train.run_fleet(recipe, work, shlex.split(a.splinter), a.ranks), indent=1, ensure_ascii=False))
     elif a.stage == "train":
         from . import brainclient, train
         if a.artifact_store is None:
