@@ -273,7 +273,8 @@ def select(recipe: Recipe, work: Workdir, eval_texts: set[str]) -> dict:
     work.selection.mkdir(parents=True, exist_ok=True)
     pq.write_table(pa.Table.from_pylist(rows), work.selection / "selection.parquet")
     report = _report(rows, voices, dict(rejected))
-    report["shortfall_hours_moved"] = short
+    # Hours some source could not fill, and how many of them the others could not take either.
+    report["shortfall_hours"] = {"before_redistribution": short, "unfilled": round(max(0.0, shortfall) / 3600, 3)}
     if "liveliness" not in recipe.raw:
         (work.selection / "voices.json").write_text(json.dumps(voices, indent=1, ensure_ascii=False))
     (work.selection / "report.json").write_text(json.dumps(report, indent=1, ensure_ascii=False))

@@ -280,8 +280,8 @@ byte-identical selection. With the v2 recipe it:
   every FLEURS test sentence, every committed evaluation sentence and every
   held-out text from training;
 - fills each source's share of 420 h (NST 45 %, RixVox 35 %, LibriVox 8 %,
-  FLEURS 2 %, LibriTTS-R 10 %) with a per-speaker cap (15 min NST, 20 min
-  RixVox, 5 h a LibriVox book, 12 min LibriTTS-R), round-robin over gender and
+  FLEURS 2 %, LibriTTS-R 10 %) with a per-speaker cap (20 min NST, 30 min
+  RixVox, 5 h a LibriVox book, 20 min LibriTTS-R), round-robin over gender and
   region; a source that runs short leaves its shortfall to the others; then
   oversamples by 10 % so the audio filters can drop clips and the shards are
   cut at exactly 420 h; 1 % of the training speakers' utterances validate.

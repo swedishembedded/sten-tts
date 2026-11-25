@@ -151,7 +151,7 @@ def test_shares_caps_and_a_short_source_left_to_the_others(work: config.Workdir)
     for r in rows:
         by_source[r["source"]] += r["duration"]
     assert by_source["librivox"] < budget * sel["share"]["librivox"], "the synthetic LibriVox is too small for its share"
-    assert report["shortfall_hours_moved"] > 0
+    assert report["shortfall_hours"]["before_redistribution"] > 0 and report["shortfall_hours"]["unfilled"] == 0
     assert sum(by_source.values()) >= budget, "its shortfall is taken from the other sources"
     assert by_source["libritts_r"] >= budget * sel["share"]["libritts_r"], "English keeps its share"
     per_speaker: dict[str, float] = defaultdict(float)
@@ -167,7 +167,7 @@ def test_shares_caps_and_a_short_source_left_to_the_others(work: config.Workdir)
 def test_a_bad_recipe_is_refused_naming_the_key(tmp_path: Path) -> None:
     text = RECIPE.read_text()
     for bad, key in ((text.replace("seed: 20261125", "seed: 20261125\nseeed: 1"), "seeed"),
-                     (text.replace("  libritts_r:\n    cap_minutes_per_speaker: 12.0", "  libritts_r:\n    cap_minutes: 12.0"), "cap_minutes")):
+                     (text.replace("  libritts_r:\n    cap_minutes_per_speaker:", "  libritts_r:\n    cap_minutes:"), "cap_minutes")):
         p = tmp_path / "r.yaml"
         p.write_text(bad)
         with pytest.raises(config.RecipeError, match=key):

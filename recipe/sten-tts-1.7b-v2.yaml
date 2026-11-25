@@ -82,10 +82,10 @@ selection:
   oversample: 1.10                     # select this much more before the audio filters drop clips
   duration_seconds: {min: 1.5, max: 30.0}     # RixVox segments run to 30 s; 30 s is 375 frames
   nst:
-    cap_minutes_per_speaker: 15.0      # auxiliary speakers; the named voices take all their clean audio
+    cap_minutes_per_speaker: 20.0      # auxiliary speakers; the named voices take all their clean audio
     min_words: 3
   rixvox:
-    cap_minutes_per_speaker: 20.0
+    cap_minutes_per_speaker: 30.0      # ~700 speakers in the 100 shards; WER filtering leaves many with less
     max_wer_whisper: 0.10              # the protocol text and Whisper's transcript agree
     min_lang_prob_sv: 0.98
     text: whisper_transcription        # verbatim; the protocol text is edited for print
@@ -94,7 +94,7 @@ selection:
   fleurs:
     cap_minutes_per_speaker: 1.0       # FLEURS names no readers: every recording is its own speaker
   libritts_r:
-    cap_minutes_per_speaker: 12.0      # 247 speakers
+    cap_minutes_per_speaker: 20.0      # 247 speakers, ~13 min each on average
   held_out:
     unseen_speakers: {nst: 12, rixvox: 6, librivox: 1, libritts_r: 4}   # whole speakers kept out of training
     voice_test_utterances: 20               # per named voice, unseen texts
