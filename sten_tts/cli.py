@@ -26,7 +26,7 @@ DEFAULT_RECIPE = Path(__file__).resolve().parents[1] / "recipe" / "sten-tts-1.7b
 
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="sten-tts", description=__doc__)
-    p.add_argument("stage", choices=["fetch", "segment", "inventory", "select", "audio", "shards", "train", "evaluate", "publish"])
+    p.add_argument("stage", choices=["fetch", "segment", "inventory", "voices", "select", "audio", "shards", "train", "evaluate", "publish"])
     p.add_argument("--workdir", required=True, type=Path, help="where this run's data, shards, checkpoints and reports live")
     p.add_argument("--recipe", type=Path, default=DEFAULT_RECIPE)
     p.add_argument("--jobs", type=int, default=min(32, os.cpu_count() or 1), help="worker processes for host-side stages")
@@ -55,6 +55,9 @@ def main(argv: list[str] | None = None) -> None:
     elif a.stage == "inventory":
         from . import inventory
         inventory.build(recipe, work, a.jobs, a.only)
+    elif a.stage == "voices":
+        from . import voices
+        print(json.dumps(voices.run(recipe, work, a.jobs), indent=1, ensure_ascii=False))
     elif a.stage == "select":
         from . import evalset, select
         evalset.write(recipe, work)

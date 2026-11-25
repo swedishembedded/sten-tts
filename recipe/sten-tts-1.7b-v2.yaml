@@ -68,6 +68,11 @@ segment:                  # stage `segment`: the LibriVox chunks cut into checke
   max_cer: 0.10             # the recognition against its aligned span of the book text
   asr_language: Swedish     # the recogniser (the judge) is told the language
 
+liveliness:               # stage `voices`: the liveliest NST speaker of each voice slot (sten_tts/voices.py has the formula)
+  min_minutes: 20.0         # a candidate has at least this much eligible audio (25 min leaves 2-8 per slot)
+  utterances: 40            # recordings measured per candidate, drawn by the seed
+  weights: {f0_range: 0.35, f0_sd: 0.25, energy_sd: 0.25, syllable_rate: 0.15}   # of the z-scores among the same gender
+
 selection:
   hours: 100.0                         # accepted training audio after every filter
   share: {nst: 0.75, rixvox: 0.25}
