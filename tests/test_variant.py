@@ -70,7 +70,8 @@ def test_distillation_trains_the_cut_checkpoint_against_the_full_model_with_no_n
     assert "new_row_lr_multiplier" not in p
     d = rec["train"]["distill"]
     assert {k: p[k] for k in d} == d and "hidden_kd_layers" not in p
-    assert p["steps"] == -(-1000 // (rec["train"]["batch_utterances"] * 4)) * rec["train"]["epochs"], "whole epochs over 4 cards"
+    t = rec["train"]
+    assert p["steps"] == -(-1000 // (t["batch_utterances"] * t["grad_accum"] * 4)) * t["epochs"], "whole epochs over 4 cards"
     assert p["install_as"] == rec["train"]["install_as"] and p["keep_best"] and p["patience"] == 4
 
 
