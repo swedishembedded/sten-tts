@@ -51,6 +51,33 @@ def _evaluation(recipe: Recipe, work: Workdir) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _samples(recipe: Recipe, work: Workdir) -> str:
+    """The listening section: the release's own samples, played from the repository."""
+    path = work.release / "samples" / "samples.json"
+    if not path.exists():
+        return ""
+    base = f"https://huggingface.co/{recipe['publish']['repo']}/resolve/main"
+    items = json.loads(path.read_text())
+    out = ["## Listen", "",
+           "Every voice reading a FLEURS sv_se test sentence the model never saw in training, with seed "
+           f"{items[0]['seed']} and no picking: the first take is the one shown. The CER is what the recogniser "
+           f"({recipe['judge']['repo']}) heard, against the sentence.", ""]
+    for it in items:
+        out += [f"**{it['voice'].capitalize()}** ({it['gender']}, {it['region']}) · CER {it['cer']:.3f}", "",
+                f"> {it['text']}", "",
+                f'<audio controls preload="none" src="{base}/{it["file"]}"></audio>', ""]
+    return "\n".join(out) + "\n"
+
+
+def _data_link(recipe: Recipe, shard: dict) -> str:
+    """Where the training data can be read: the published dataset, if the recipe has one."""
+    if "dataset" not in recipe.raw:
+        return ""
+    d = recipe["dataset"]
+    return (f"The training data is published as [{d['name']}](https://huggingface.co/datasets/{d['repo']}): "
+            f"the {shard['hours']} hours used here, with its held-out sets, sources and licences.\n")
+
+
 def _run_line(train_report: dict) -> str:
     """Where and how long it trained, and which checkpoint the release is."""
     ranks, result = train_report.get("ranks", 1), train_report["result"]
@@ -130,7 +157,8 @@ A Swedish text-to-speech model with twelve named voices, fine-tuned from
 It is a Qwen3-TTS `custom_voice` checkpoint in the upstream layout and adds the
 language `swedish`; English is trained alongside, so English words and names inside
 Swedish sentences keep their English pronunciation.
-
+{_data_link(recipe, shard)}
+{_samples(recipe, work)}
 ## Use
 
 With the upstream package (`pip install qwen-tts==0.1.1`):

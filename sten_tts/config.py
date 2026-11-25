@@ -84,6 +84,17 @@ def load(path: str | Path) -> Recipe:
         _require(live["weights"], {"f0_range", "f0_sd", "energy_sd", "syllable_rate"}, f"{path}: liveliness.weights")
     if "dataset" in raw:
         _require(raw["dataset"], {"repo", "name", "rows_per_shard"}, f"{path}: dataset")
+    _require(raw["publish"], {"repo", "private"}, f"{path}: publish", optional={"samples"})
+    if "samples" in raw["publish"]:
+        smp = raw["publish"]["samples"]
+        _require(smp, {"seed", "order"}, f"{path}: publish.samples", optional={"sentence"})
+        if smp["seed"] not in raw["evaluate"]["seeds"]:
+            raise RecipeError(f"{path}: publish.samples.seed {smp['seed']} is not an evaluation seed {raw['evaluate']['seeds']}")
+        if sorted(smp["order"]) != sorted(v["name"] for v in raw["voices"]):
+            raise RecipeError(f"{path}: publish.samples.order must name every voice exactly once")
+        unknown = set(smp.get("sentence", {})) - {v["name"] for v in raw["voices"]}
+        if unknown:
+            raise RecipeError(f"{path}: publish.samples.sentence names {sorted(unknown)}, which are not voices")
     sel = raw["selection"]
     if not isinstance(sel, dict) or not isinstance(sel.get("share"), dict):
         raise RecipeError(f"{path}: selection.share must be a mapping of source to share")

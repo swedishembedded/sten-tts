@@ -27,7 +27,7 @@ DEFAULT_RECIPE = Path(__file__).resolve().parents[1] / "recipe" / "sten-tts-1.7b
 
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="sten-tts", description=__doc__)
-    p.add_argument("stage", choices=["fetch", "segment", "inventory", "voices", "select", "audio", "shards", "train", "evaluate", "publish", "export", "publish-dataset"])
+    p.add_argument("stage", choices=["fetch", "segment", "inventory", "voices", "select", "audio", "shards", "train", "evaluate", "samples", "publish", "export", "publish-dataset"])
     p.add_argument("--workdir", required=True, type=Path, help="where this run's data, shards, checkpoints and reports live")
     p.add_argument("--recipe", type=Path, default=DEFAULT_RECIPE)
     p.add_argument("--jobs", type=int, default=min(32, os.cpu_count() or 1), help="worker processes for host-side stages")
@@ -88,6 +88,11 @@ def main(argv: list[str] | None = None) -> None:
     elif a.stage == "export":
         from . import export
         print(json.dumps(export.run(recipe, work, a.jobs), indent=1))
+    elif a.stage == "samples":
+        from . import samples
+        from .modelcard import model_card
+        print(json.dumps(samples.write(recipe, work), ensure_ascii=False, indent=1))
+        (work.release / "README.md").write_text(model_card(recipe, work, json.loads((work.train / "report.json").read_text())))
     elif a.stage == "publish-dataset":
         from . import publish_dataset
         print(json.dumps(publish_dataset.run(recipe, work, a.hub_dir), indent=1))

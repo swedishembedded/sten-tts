@@ -44,7 +44,7 @@ import pyarrow.parquet as pq
 import soundfile as sf
 import soxr
 
-from . import metrics
+from . import metrics, samples
 from .brainclient import BrainPool
 from .config import Recipe, Workdir
 from .modelcard import model_card
@@ -206,6 +206,8 @@ def run(recipe: Recipe, work: Workdir, pool: BrainPool, concurrency: int, upstre
               "paired_cer": paired, "failures": {k: sum(1 for r in st if r["failure"] == k) for k in ("silent", "length_cap", "too_long")},
               "upstream": upstream, "clips": len(rows), "sets": per_set(rows, region_of)}
     (work.evaluation / "report.json").write_text(json.dumps(report, indent=1, ensure_ascii=False))
+    if "samples" in recipe["publish"]:
+        samples.write(recipe, work)
     train_report = json.loads((work.train / "report.json").read_text())
     (work.release / "README.md").write_text(model_card(recipe, work, train_report))
     return {k: report[k] for k in ("gates", "base", "floor")}

@@ -22,7 +22,7 @@ UPSTREAM_PYTHON ?=
 STEN := $(PYTHON) -m sten_tts.cli
 ARGS = --workdir "$(WORKDIR)" --recipe "$(RECIPE)"
 
-.PHONY: help env test all fetch segment inventory voices select audio shards train evaluate publish export publish-dataset check-workdir
+.PHONY: help env test all fetch segment inventory voices select audio shards train evaluate samples publish export publish-dataset check-workdir
 
 ## help - list the targets
 help:
@@ -82,6 +82,10 @@ endif
 ## evaluate - synthesis by every voice, recognition, similarity, gates; upstream loader check
 evaluate: check-workdir
 	$(STEN) evaluate $(ARGS) --concurrency $(CONCURRENCY) $(if $(UPSTREAM_PYTHON),--upstream-python "$(UPSTREAM_PYTHON)")
+
+## samples - the model card's listening samples, taken from the evaluation's clips (no GPU)
+samples: check-workdir
+	$(STEN) samples $(ARGS)
 
 ## publish - upload the release to its private Hugging Face repository (HUB_DIR: a local mirror)
 publish: check-workdir
