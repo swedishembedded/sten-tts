@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import fnmatch
 import json
+from concurrent.futures import ThreadPoolExecutor
 
 from huggingface_hub import HfApi, hf_hub_download
 
@@ -40,7 +41,7 @@ def source_files(spec: dict, listing: list[str]) -> list[str]:
     return chosen
 
 
-def fetch(recipe: Recipe, work: Workdir, only: list[str] | None = None) -> None:
+def fetch(recipe: Recipe, work: Workdir, only: list[str] | None = None, jobs: int = 8) -> None:
     api = HfApi()
     for name, spec in recipe["sources"].items():
         if only and name not in only:
@@ -52,13 +53,16 @@ def fetch(recipe: Recipe, work: Workdir, only: list[str] | None = None) -> None:
             files += [f for f in ("train/dataset_info.json",) if f in meta]
         dest = work.raw(name)
         dest.mkdir(parents=True, exist_ok=True)
-        record = []
-        for f in files:
-            path = hf_hub_download(spec["repo"], f, repo_type="dataset", revision=spec["revision"], local_dir=dest)
+
+        def one(f: str) -> dict:
+            hf_hub_download(spec["repo"], f, repo_type="dataset", revision=spec["revision"], local_dir=dest)
             size = (dest / f).stat().st_size
             if meta[f].size is not None and size != meta[f].size:
                 raise RuntimeError(f"{name}: {f}: {size} bytes on disk, the hub lists {meta[f].size}")
-            record.append({"file": f, "bytes": size, "blob_id": meta[f].blob_id})
             print(f"fetch {name}: {f} ({size / 1e9:.2f} GB)", flush=True)
-            del path
+            return {"file": f, "bytes": size, "blob_id": meta[f].blob_id}
+
+        # Files download side by side; the record keeps the sorted order whatever finishes first.
+        with ThreadPoolExecutor(jobs) as pool:
+            record = list(pool.map(one, files))
         (dest / "fetched.json").write_text(json.dumps({"repo": spec["repo"], "revision": spec["revision"], "files": record}, indent=1))

@@ -46,7 +46,7 @@ def main(argv: list[str] | None = None) -> None:
 
     if a.stage == "fetch":
         from . import fetch
-        fetch.fetch(recipe, work, a.only)
+        fetch.fetch(recipe, work, a.only, a.jobs)
     elif a.stage == "inventory":
         from . import inventory
         inventory.build(recipe, work, a.jobs)
