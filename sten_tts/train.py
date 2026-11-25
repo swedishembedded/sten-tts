@@ -47,10 +47,8 @@ def request(recipe: Recipe, work: Workdir, ranks: int = 1) -> dict:
     records = json.loads((work.shards / "train.json").read_text())["records"]
     steps = math.ceil(records / (t["batch_utterances"] * t["grad_accum"] * ranks)) * t["epochs"]
     lang = recipe["language"]
+    languages = [lang["name"], *lang.get("base_languages", [])]
     params = {
-        "base": recipe["base"]["repo"],
-        "languages": json.dumps({lang["name"]: {"new": True, "init_from": lang["init_from"]}, **{b: {"new": False} for b in lang.get("base_languages", [])}}),
-        "voices": json.dumps({v["name"]: {"new": True} for v in recipe["voices"]}),
         "steps": steps,
         "lr": t["lr"],
         "weight_decay": t["weight_decay"],
@@ -61,11 +59,24 @@ def request(recipe: Recipe, work: Workdir, ranks: int = 1) -> dict:
         "max_frames": t["max_frames"],
         "residual_weight": t["mtp_weight"],
         "streaming_fraction": t["streaming_fraction"],
-        "new_row_lr_multiplier": t["lr_multipliers"]["new_rows"],
         "eval_every": t["eval_every"],
         "seed": recipe.seed,
         "install_as": t["install_as"],
     }
+    if recipe.is_variant:
+        # The cut checkpoint is its own base and already holds the language and the voices; the full model teaches it.
+        params.update({"base": "local/" + recipe["compress"]["install_as"], "teacher": recipe["teacher"]["model"],
+                       "languages": json.dumps({name: {"new": False} for name in languages}),
+                       "voices": json.dumps({v["name"]: {"new": False} for v in recipe["voices"]})})
+        d = t["distill"]
+        params.update({k: v for k, v in d.items() if k != "hidden_kd_layers"})
+        if "hidden_kd_layers" in d:
+            params["hidden_kd_layers"] = json.dumps(d["hidden_kd_layers"])
+    else:
+        params.update({"base": recipe["base"]["repo"],
+                       "languages": json.dumps({lang["name"]: {"new": True, "init_from": lang["init_from"]}, **{b: {"new": False} for b in lang.get("base_languages", [])}}),
+                       "voices": json.dumps({v["name"]: {"new": True} for v in recipe["voices"]}),
+                       "new_row_lr_multiplier": t["lr_multipliers"]["new_rows"]})
     # Optional settings: selection on held-out loss, and resumable state (expensive across many ranks).
     for key in ("eval_batches", "patience", "keep_best", "resume_key", "checkpoint_every"):
         if key in t:
@@ -121,12 +132,13 @@ def collect(artifacts: Path, checkpoint_digest: str, release: Path) -> list[dict
     return manifest["files"]
 
 
-def run(recipe: Recipe, work: Workdir, pool: BrainPool, artifacts: Path, allow_cpu: bool = False) -> dict:
+def run(recipe: Recipe, work: Workdir, pool: BrainPool, artifacts: Path, allow_cpu: bool = False, cards: int = 1) -> dict:
+    """Train on the first server, one data-parallel rank on each of `cards` of its cards."""
     # Training runs on one server: the first, the one started with `--training`.
     pool = BrainPool(pool.transport, pool.buses[:1], pool.factory)
     pool.require_model("brain/train", "speech_sft")
     brain = pool.first()
-    params = {**request(recipe, work), "cards": 1}
+    params = {**request(recipe, work, cards), "cards": cards}
     if allow_cpu:
         params["allow_cpu"] = True
     # The shards go through the artifact store by digest: a D-Bus blob is capped
@@ -147,12 +159,13 @@ def run(recipe: Recipe, work: Workdir, pool: BrainPool, artifacts: Path, allow_c
         events.write(json.dumps(rec) + "\n")
         events.flush()
         shown = {k: event[k] for k in ("step", "steps", "loss", "talker_ce", "code_predictor_ce", "eos_accuracy", "frames_per_s", "eval_loss") if k in event}
+        shown.update({k: v for k, v in event.items() if "kl" in k or "kd" in k})  # a distillation's terms
         print("train:", json.dumps(shown), flush=True)
 
     out = brain.subscribe("brain/train", "speech_sft", params, blobs=blobs, on_event=metrics, timeout=30 * 86400).outputs
     events.close()
     files = collect(artifacts, out["checkpoint_digest"], work.release)
-    report = {"request": params, "plan": plan, "result": out, "files": files, "seconds": round(time.time() - started)}
+    report = {"request": params, "ranks": cards, "plan": plan, "result": out, "files": files, "seconds": round(time.time() - started)}
     (work.release / "README.md").write_text(model_card(recipe, work, report))
     (work.train / "report.json").write_text(json.dumps(report, indent=1, ensure_ascii=False))
     return report

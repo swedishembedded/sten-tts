@@ -282,8 +282,10 @@ Each stage is also `python -m sten_tts.cli <stage> --workdir DIR` (see
 | `select` | `inventory/`, FLEURS transcripts | `selection/selection.parquet` (utterance -> split, voice), `selection/voices.json`, `selection/report.json`, `evaluation/sentences.json` |
 | `audio` | `selection/`, `raw/` | `audio/<split>-NNNN.parquet` (trimmed 16-bit WAV + measures), `audio/rejected.parquet`, `audio/report.json` |
 | `shards` | `audio/`, the brain server | `shards/{train,validation}.bttshrd` (brain's `brain-tts-shard-v1`), `shards/report.json` |
+| `compress` | a variant recipe, `shards/`, `evaluation/sentences.json`, the brain server | `compress/report.json` (the surgery manifest and each edit's measured loss and KL), `compress/checkpoint/` (the cut, installed as `compress.install_as`) |
 | `train` | `shards/`, the brain server | the job's events in `train/events.jsonl`, `release/` (the checkpoint), `train/report.json` |
 | `evaluate` | `release/`, the brain server | `evaluation/clips.parquet`, `evaluation/report.json` with every gate, the samples |
+| `speed` | a variant recipe, the first brain server | `evaluation/speed.json`: real-time factor and codec frames a second of the variant and the full model, one request at a time on one card |
 | `samples` | `evaluation/clips.parquet`, `publish.samples` | `release/samples/`: one unpicked clip of an unseen FLEURS sentence per voice, played by the model card |
 | `publish` | `release/`, `evaluation/report.json` | the model repository: created private if missing, uploaded, then made public when `publish.private` is false |
 | `export` | `selection/`, `audio/`, `segments/report.json` | `export/`: the training collection as a Hugging Face dataset (`data/<split>-*.parquet` with FLAC audio, `README.md` card, `TERMS.md`, `voices.json`, `reports/`, `manifest.json`) |
@@ -353,6 +355,46 @@ train. `evaluation/report.json` has, under `sets`, the CER of each set overall,
 for the base, per voice and per region, and the model card shows the per-voice
 and per-region tables. `publish`
 refuses unless every gate passed.
+
+## Compact variants
+
+A variant recipe (`recipe/sten-tts-950m.yaml`) makes a smaller model out of the
+trained Sten-TTS-1.7B. It names the full recipe (`variant_of`) and takes the
+data, the voices, the evaluation sets and the release gates from it; it adds:
+
+- `teacher`: the full model in brain's model store;
+- `compress`: a weight-surgery plan for brain's `speech_surgery` (vocabulary
+  trim, MLP channel selection by Fisher score, layer removal by measured KL,
+  optionally chosen greedily with `greedy: true`), and the most parameters
+  `model.safetensors` may hold;
+- `train`: distillation from the full model (`train.distill`: the weights of
+  the ground-truth loss and of the KL terms of the first and the residual
+  codebooks, and the temperature); the held-out KL to the full model picks
+  the checkpoint and stops the run;
+- `evaluate.parity`: the full model's evaluation directory and the margins the
+  variant must hold against it, clip for clip (FLEURS CER, and per voice
+  similarity, identification and failures), as extra gates;
+- `evaluate.speed`: the sentences and voice the `speed` stage times;
+- `publish.subfolder`: the folder of the full model's repository it goes to.
+
+The variant's work directory needs from the full run only what evaluation
+reads: `selection/`, `audio/voice_test-*.parquet`, `shards/` (the shards
+themselves, or links to them), `evaluation/sentences.json`, and the full
+model's evaluation (`clips.parquet`, `report.json`, `sentences.json`) under
+`evaluate.parity.teacher_evaluation`. The base model's clips and the
+recogniser floor are taken from that evaluation instead of being made again,
+when it provably did the same computation: the same sentences file, voices
+and seed, and the same real-recording similarity per voice (the same
+reference recordings and encoder); otherwise they are made again.
+
+```bash
+R=recipe/sten-tts-950m.yaml
+scripts/with-brain.sh --brain BIN --workdir "$WORK" --recipe $R --device gpu0,cpu compress
+scripts/with-brain.sh --brain BIN --workdir "$WORK" --recipe $R --device gpu,cpu --cards 4 train
+scripts/with-brain.sh --brain BIN --workdir "$WORK" --recipe $R --upstream-python PY \
+    --device gpu0,cpu --device gpu1,cpu --device gpu2,cpu --device gpu3,cpu evaluate speed samples
+make publish WORKDIR="$WORK" RECIPE=$R HUB_DIR=<local mirror>
+```
 
 ## Status
 

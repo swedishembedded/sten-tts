@@ -27,7 +27,7 @@ DEFAULT_RECIPE = Path(__file__).resolve().parents[1] / "recipe" / "sten-tts-1.7b
 
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="sten-tts", description=__doc__)
-    p.add_argument("stage", choices=["fetch", "segment", "inventory", "voices", "select", "audio", "shards", "train", "evaluate", "samples", "publish", "export", "publish-dataset"])
+    p.add_argument("stage", choices=["fetch", "segment", "inventory", "voices", "select", "audio", "shards", "compress", "train", "evaluate", "speed", "samples", "publish", "export", "publish-dataset"])
     p.add_argument("--workdir", required=True, type=Path, help="where this run's data, shards, checkpoints and reports live")
     p.add_argument("--recipe", type=Path, default=DEFAULT_RECIPE)
     p.add_argument("--jobs", type=int, default=min(32, os.cpu_count() or 1), help="worker processes for host-side stages")
@@ -40,7 +40,8 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--brain-key-file", type=Path, help="the API key of the https:// brain servers (a file holding it)")
     p.add_argument("--brain-ca-file", type=Path, help="the certificate the https:// brain servers present, when not signed by a system CA")
     p.add_argument("--concurrency", type=int, default=8, help="requests in flight to the brain server")
-    p.add_argument("--artifact-store", type=Path, help="train: the brain server's --artifact-store directory, where the checkpoint is published")
+    p.add_argument("--artifact-store", type=Path, help="compress, train: the brain server's --artifact-store directory, where the checkpoint is published")
+    p.add_argument("--cards", type=int, default=1, help="train on one server: how many of its cards the job trains on, one data-parallel rank each")
     p.add_argument("--splinter", help="train: the splinter command with its site flags; the job then runs through `splinter jobs run-served` over every card splinter is given")
     p.add_argument("--ranks", type=int, default=1, help="train with --splinter: how many cards the job trains on (sets its step count)")
     p.add_argument("--allow-cpu", action="store_true", help="train: let the fine-tune run on the CPU backend (a smoke run; far too slow for the release)")
@@ -74,6 +75,18 @@ def main(argv: list[str] | None = None) -> None:
     elif a.stage == "shards":
         from . import brainclient, shards
         print(json.dumps(shards.build(recipe, work, brainclient.connect(a.brain_transport, a.brain_bus or ["session"], a.brain_key_file, a.brain_ca_file), a.concurrency), indent=1))
+    elif a.stage == "compress":
+        from . import brainclient, compress
+        if not recipe.is_variant:
+            p.error(f"compress: {a.recipe} is a full recipe; only a variant (variant_of) is cut from a model")
+        if a.artifact_store is None:
+            p.error("compress needs --artifact-store (the brain server's artifact store directory)")
+        print(json.dumps(compress.run(recipe, work, brainclient.connect(a.brain_transport, a.brain_bus or ["session"], a.brain_key_file, a.brain_ca_file), a.artifact_store, a.allow_cpu), indent=1))
+    elif a.stage == "speed":
+        from . import brainclient, speed
+        if "speed" not in recipe["evaluate"]:
+            p.error(f"speed: {a.recipe} has no evaluate.speed")
+        print(json.dumps(speed.run(recipe, work, brainclient.connect(a.brain_transport, a.brain_bus or ["session"], a.brain_key_file, a.brain_ca_file)), indent=1))
     elif a.stage == "train" and a.splinter:
         from . import train
         print(json.dumps(train.run_fleet(recipe, work, shlex.split(a.splinter), a.ranks), indent=1, ensure_ascii=False))
@@ -81,7 +94,7 @@ def main(argv: list[str] | None = None) -> None:
         from . import brainclient, train
         if a.artifact_store is None:
             p.error("train needs --artifact-store (the brain server's artifact store directory)")
-        print(json.dumps(train.run(recipe, work, brainclient.connect(a.brain_transport, a.brain_bus or ["session"], a.brain_key_file, a.brain_ca_file), a.artifact_store, a.allow_cpu), indent=1, ensure_ascii=False))
+        print(json.dumps(train.run(recipe, work, brainclient.connect(a.brain_transport, a.brain_bus or ["session"], a.brain_key_file, a.brain_ca_file), a.artifact_store, a.allow_cpu, a.cards), indent=1, ensure_ascii=False))
     elif a.stage == "evaluate":
         from . import brainclient, evaluate
         print(json.dumps(evaluate.run(recipe, work, brainclient.connect(a.brain_transport, a.brain_bus or ["session"], a.brain_key_file, a.brain_ca_file), a.concurrency, a.upstream_python), indent=1))

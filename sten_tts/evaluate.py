@@ -23,6 +23,11 @@ the brain server:
   similarity and nearest-voice identification;
 * the upstream `qwen-tts` package loads the release and speaks two sentences.
 
+A compact variant (a recipe with `evaluate.parity`) is also judged clip for clip
+against the full model's evaluation, and takes the base model's clips and the
+floor from it instead of making them again, when that evaluation provably did
+the same computation (`carry`).
+
 Clips and per-clip results go to `evaluation/clips.parquet`, the summary and
 every gate to `evaluation/report.json`, and the model card is rewritten with
 the numbers.
@@ -110,11 +115,42 @@ def _voice_refs(work: Workdir) -> dict[str, list[dict]]:
     return dict(refs)
 
 
+# How far a voice's real-recording similarity may differ from the full model's evaluation for its recordings
+# and speaker encoder to count as the same: the median cosine is reproducible to far below this.
+SAME_SIMILARITY = 5e-5
+
+
+def carry(teacher: Path, sentences: Path, voices: list[str], seed: int, real_similarity: dict[str, float]) -> dict | None:
+    """The full model's base-model clips and recogniser floor, when its evaluation provably did the same computation.
+
+    The base model's clips depend only on the sentences, the voices, their reference recordings, the seed and the
+    base model, none of which a variant changes. They are carried when the full model's evaluation read exactly
+    these sentences (the same `sentences.json`), cloned exactly these voices at this seed, and measured the same real-recording
+    similarity per voice (same held-out recordings, same encoder). Otherwise None: they are made again. The audio
+    stays in the full model's clips file.
+    """
+    sets = json.loads(sentences.read_text())
+    if json.loads((teacher / "sentences.json").read_text()) != sets:
+        return None
+    report = json.loads((teacher / "report.json").read_text())
+    theirs = {v: m["real_similarity"] for v, m in report["voices"].items()}
+    if set(theirs) != set(voices) or any(abs(theirs[v] - real_similarity[v]) > SAME_SIMILARITY for v in voices):
+        return None
+    cols = ["system", "voice", "set", "sentence", "seed", "text", "heard", "cer", "similarity", "nearest", "failure"]
+    rows = pq.read_table(teacher / "clips.parquet", columns=cols, filters=[("system", "=", "base")]).to_pylist()
+    wanted = {(v, n, s["id"], seed, s["text"]) for n, items in sets.items() for v in voices for s in items}
+    if len(rows) != len(wanted) or {(r["voice"], r["set"], r["sentence"], r["seed"], r["text"]) for r in rows} != wanted:
+        return None
+    return {"rows": [{**r, "wav": None} for r in rows], "floor": report["floor"]["cer"]}
+
+
 def run(recipe: Recipe, work: Workdir, pool: BrainPool, concurrency: int, upstream_python: Path | None) -> dict:
     ev = recipe["evaluate"]
     sten = "local/" + recipe["train"]["install_as"]
     base, judge = recipe["base"]["repo"], recipe["judge"].get("served_as", recipe["judge"]["repo"])
-    for model, action in ((sten, "design"), (base, "clone"), (base, "encode"), (judge, "transcribe")):
+    parity_spec = ev.get("parity")
+    teacher_dir = work.root / parity_spec["teacher_evaluation"] if parity_spec else None
+    for model, action in ((sten, "design"), (base, "encode"), (judge, "transcribe")):
         pool.require_model(model, action)
     sets = _sentences(work)
     sentences = sets["fleurs"]
@@ -131,12 +167,10 @@ def run(recipe: Recipe, work: Workdir, pool: BrainPool, concurrency: int, upstre
     def xvector(wav: bytes) -> list[float]:
         return list(pool.get().encode_audio(wav, model=base).xvector)
 
-    # The voices' own held-out recordings: the recogniser's floor and each voice's centroid.
+    # The voices' own held-out recordings: each voice's centroid and the recogniser's floor.
     held = [(v, r) for v in voices for r in refs[v]]
     with ThreadPoolExecutor(concurrency) as ex:
-        held_text = list(ex.map(lambda vr: transcribe(vr[1]["wav"]), held))
         held_x = list(ex.map(lambda vr: xvector(vr[1]["wav"]), held))
-    floor = float(np.mean([metrics.cer(r["text"], t) for (_, r), t in zip(held, held_text)]))
     centroid = {v: np.mean([x for (vv, _), x in zip(held, held_x) if vv == v], axis=0).tolist() for v in voices}
     # How close a voice's own real recordings sit to its centroid (each left out of the centroid it is
     # compared with): the speaker encoder's scale, against which a synthesized clip is judged.
@@ -144,9 +178,20 @@ def run(recipe: Recipe, work: Workdir, pool: BrainPool, concurrency: int, upstre
     for v in voices:
         xs = [x for (vv, _), x in zip(held, held_x) if vv == v]
         real_similarity[v] = float(np.median([metrics.cosine(x, np.mean([y for j, y in enumerate(xs) if j != i], axis=0).tolist()) for i, x in enumerate(xs)]))
+    # A variant's base-model clips and floor are the full model's, when that is provably the same computation.
+    carried = carry(teacher_dir, work.evaluation / "sentences.json", voices, ev["seeds"][0], real_similarity) if teacher_dir else None
+    if carried:
+        floor = carried["floor"]
+        print(f"evaluate: the base model's {len(carried['rows'])} clips and the floor are carried from {teacher_dir}", flush=True)
+    else:
+        pool.require_model(base, "clone")
+        with ThreadPoolExecutor(concurrency) as ex:
+            held_text = list(ex.map(lambda vr: transcribe(vr[1]["wav"]), held))
+        floor = float(np.mean([metrics.cer(r["text"], t) for (_, r), t in zip(held, held_text)]))
 
     jobs = [("sten", v, name, s, seed) for name, items in sets.items() for v in voices for s in items for seed in ev["seeds"]]
-    jobs += [("base", v, name, s, ev["seeds"][0]) for name, items in sets.items() for v in voices for s in items]
+    if not carried:
+        jobs += [("base", v, name, s, ev["seeds"][0]) for name, items in sets.items() for v in voices for s in items]
 
     def one(job):
         system, voice, set_name, sent, seed = job
@@ -170,6 +215,7 @@ def run(recipe: Recipe, work: Workdir, pool: BrainPool, concurrency: int, upstre
             rows.append(r)
             if i % 200 == 0:
                 print(f"evaluate: {i}/{len(jobs)} clips", flush=True)
+    rows += carried["rows"] if carried else []
     work.evaluation.mkdir(parents=True, exist_ok=True)
     pq.write_table(pa.Table.from_pylist(rows), work.evaluation / "clips.parquet")
 
@@ -202,17 +248,20 @@ def run(recipe: Recipe, work: Workdir, pool: BrainPool, concurrency: int, upstre
         "failure_rate_max": {"value": round(fail, 4), "threshold": g["failure_rate_max"], "pass": fail <= g["failure_rate_max"]},
         "upstream_loads": {"value": upstream["status"], "threshold": "loads and speaks", "pass": upstream["status"] == "ok"},
     }
-    if "parity" in ev:
+    if parity_spec:
         # A compact variant: the full model's clips of the same sentences, voices and seeds are the reference.
-        spec = ev["parity"]
-        teacher_rows = pq.read_table(work.root / spec["teacher_clips"], columns=["system", "set", "voice", "sentence", "seed", "cer", "similarity", "nearest", "failure"]).to_pylist()
-        par = parity.compare(rows, teacher_rows, voices, spec, seed=recipe.seed)
+        teacher_rows = pq.read_table(teacher_dir / "clips.parquet", columns=["system", "set", "voice", "sentence", "seed", "cer", "similarity", "nearest", "failure"],
+                                     filters=[("system", "=", "sten")]).to_pylist()
+        par = parity.compare(rows, teacher_rows, voices, parity_spec, seed=recipe.seed)
         gates.update({f"parity_{k}": v for k, v in par["gates"].items()})
     report = {"gates": gates, "voices": per_voice, "base": {"cer": float(np.mean([r["cer"] for r in bs]))}, "floor": {"cer": floor},
               "paired_cer": paired, "failures": {k: sum(1 for r in st if r["failure"] == k) for k in ("silent", "length_cap", "too_long")},
               "upstream": upstream, "clips": len(rows), "sets": per_set(rows, region_of)}
-    if "parity" in ev:
+    if parity_spec:
         report["parity"] = par
+        report["carried"] = ({"from": parity_spec["teacher_evaluation"], "base_clips": len(carried["rows"]), "floor": True,
+                              "why": "the same sentences, voices, seed and base model, and the same real-recording similarity per voice"}
+                             if carried else None)
     (work.evaluation / "report.json").write_text(json.dumps(report, indent=1, ensure_ascii=False))
     if "samples" in recipe["publish"]:
         samples.write(recipe, work)

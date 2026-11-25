@@ -56,7 +56,8 @@ def _samples(recipe: Recipe, work: Workdir) -> str:
     path = work.release / "samples" / "samples.json"
     if not path.exists():
         return ""
-    base = f"https://huggingface.co/{recipe['publish']['repo']}/resolve/main"
+    sub = recipe["publish"].get("subfolder")
+    base = f"https://huggingface.co/{recipe['publish']['repo']}/resolve/main" + (f"/{sub}" if sub else "")
     items = json.loads(path.read_text())
     texts = list(dict.fromkeys(it["text"] for it in items))  # in the order the voices come, the first voice's sentence first
     common = Counter(it["text"] for it in items).most_common(1)[0][0]
@@ -114,7 +115,7 @@ def _proof(evaluation: dict | None, hours: str, shard: dict, voices: dict, train
     return text
 
 
-def _evaluation(recipe: Recipe, r: dict) -> str:
+def _evaluation(recipe: Recipe, r: dict, name: str = "Sten-TTS") -> str:
     """The results section, from the evaluation's report."""
     ev, sets, per_voice = recipe["evaluate"], r["sets"], r["voices"]
     names = _set_order(sets)
@@ -129,10 +130,10 @@ def _evaluation(recipe: Recipe, r: dict) -> str:
         f"[{recipe['judge']['repo']}](https://huggingface.co/{recipe['judge']['repo']}), told that the language is "
         f"{ev['judge_language']}, transcribed each clip, and the character error rate (CER, lower is better) compares "
         "that transcript with the sentence. The base model read the same sentences, cloning each voice from one of its recordings.", "",
-        "| test set | sentences | Sten-TTS | base model |", "|---|---|---|---|"]
+        f"| test set | sentences | {name} | base model |", "|---|---|---|---|"]
     lines += [f"| {SETS.get(n, (n, ''))[0]} | {sentences[n]} | **{sets[n]['cer']:.3f}** | {sets[n]['base_cer']:.3f} |" for n in names]
     lines += ["", "; ".join(f"{SETS[n][0]}: {SETS[n][1]}" for n in names if n in SETS) + ".", "",
-              f"- **Against the base model.** On FLEURS the CER difference, Sten-TTS minus base, is {r['paired_cer']['mean_diff']:.3f} "
+              f"- **Against the base model.** On FLEURS the CER difference, {name} minus base, is {r['paired_cer']['mean_diff']:.3f} "
               f"(95% paired-bootstrap interval {low:.3f} to {high:.3f}, n = {r['paired_cer']['n']:,} voice and sentence pairs).",
               f"- **Reliability.** Failure rate {r['gates']['failure_rate_max']['value']:g} on the {sets['fleurs']['clips']:,} FLEURS clips: "
               "none was silent, ran into the length limit or ran on past its text.",
@@ -155,6 +156,9 @@ def _evaluation(recipe: Recipe, r: dict) -> str:
 
 
 def model_card(recipe: Recipe, work: Workdir, train_report: dict) -> str:
+    if recipe.is_variant:
+        from .variantcard import variant_card
+        return variant_card(recipe, work, train_report)
     sel = json.loads((work.selection / "report.json").read_text())
     shard = json.loads((work.shards / "train.json").read_text())
     voices = json.loads((work.selection / "voices.json").read_text())

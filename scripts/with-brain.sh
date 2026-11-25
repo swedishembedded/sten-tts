@@ -8,6 +8,7 @@
 #   scripts/with-brain.sh --brain BIN --workdir DIR [--recipe FILE] [--device SPEC ...]
 #                         [--brain-data-dir DIR] [--python PY] [--upstream-python PY]
 #                         [--allow-cpu]         # let the fine-tune run on the CPU backend (smoke runs)
+#                         [--cards N]           # train on N cards of the first server (start it with a --device naming them)
 #                         [--concurrency N]     # requests in flight to the servers (lower it on a CPU)
 #                         [--remote URL ...] [--remote-key-file F] [--remote-ca-file F]
 #                                               # brain servers already running elsewhere (https://host:port)
@@ -18,13 +19,13 @@
 # it, which helps a model that serves one request at a time (the recogniser in
 # `segment`). The first server runs served training with its artifact store in
 # DIR/artifacts and is the one `train` uses; the other stages spread their
-# requests over all of them. After `train` the servers are restarted, because a
-# model it installs is served from the next start. Server logs go to
-# DIR/brain-serve-N.log. --remote adds servers on other machines, reached over
-# HTTPS with their API key, to every stage but train.
+# requests over all of them. After `compress` and `train` the servers are
+# restarted, because a model they install is served from the next start.
+# Server logs go to DIR/brain-serve-N.log. --remote adds servers on other
+# machines, reached over HTTPS with their API key, to every stage but those two.
 set -euo pipefail
 
-brain= workdir= recipe=recipe/sten-tts-1.7b-v2.yaml data_dir= python=.venv/bin/python upstream= allow_cpu= concurrency= stages=() devices=() remotes=() remote_key= remote_ca=
+brain= workdir= recipe=recipe/sten-tts-1.7b-v2.yaml data_dir= python=.venv/bin/python upstream= allow_cpu= cards= concurrency= stages=() devices=() remotes=() remote_key= remote_ca=
 while [ $# -gt 0 ]; do
     case "$1" in
         --brain) brain=$2; shift 2 ;;
@@ -35,11 +36,12 @@ while [ $# -gt 0 ]; do
         --python) python=$2; shift 2 ;;
         --upstream-python) upstream=$2; shift 2 ;;
         --allow-cpu) allow_cpu=1; shift ;;
+        --cards) cards=$2; shift 2 ;;
         --concurrency) concurrency=$2; shift 2 ;;
         --remote) remotes+=("$2"); shift 2 ;;
         --remote-key-file) remote_key=$2; shift 2 ;;
         --remote-ca-file) remote_ca=$2; shift 2 ;;
-        -h|--help) sed -n '2,26p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,27p' "$0"; exit 0 ;;
         -*) echo "with-brain: unknown flag $1" >&2; exit 2 ;;
         *) stages+=("$1"); shift ;;
     esac
@@ -110,12 +112,13 @@ start
 for s in "${stages[@]}"; do
     extra=()
     case "$s" in
-        train) extra=(--artifact-store "$workdir/artifacts"); [ -n "$allow_cpu" ] && extra+=(--allow-cpu) ;;
+        compress) extra=(--artifact-store "$workdir/artifacts"); [ -n "$allow_cpu" ] && extra+=(--allow-cpu) ;;
+        train) extra=(--artifact-store "$workdir/artifacts"); [ -n "$allow_cpu" ] && extra+=(--allow-cpu); [ -n "$cards" ] && extra+=(--cards "$cards") ;;
         evaluate) [ -n "$upstream" ] && extra=(--upstream-python "$upstream") ;;
     esac
     case "$s" in shards|evaluate|segment) [ -n "$concurrency" ] && extra+=(--concurrency "$concurrency") ;; esac
     flags=("${bus_flags[@]}")
-    [ "$s" != train ] && flags+=("${remote_flags[@]}")
+    case "$s" in compress|train) ;; *) flags+=("${remote_flags[@]}") ;; esac
     "$python" -m sten_tts.cli "$s" --workdir "$workdir" --recipe "$recipe" "${flags[@]}" "${extra[@]}"
-    if [ "$s" = train ]; then stop; start; fi
+    case "$s" in compress|train) stop; start ;; esac
 done

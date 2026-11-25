@@ -24,6 +24,16 @@ _TOP = {"name", "seed", "base", "judge", "language", "sources", "selection", "au
 # Stages a recipe may leave out (v1 had none of them).
 _OPTIONAL_TOP = {"segment", "liveliness", "dataset"}
 _SEGMENT = {"source", "min_seconds", "max_seconds", "min_pause_seconds", "silence_db", "max_cer", "asr_language"}
+# A compact variant names the full recipe it is carved from and takes the data, voices, evaluation and gates
+# from it; these are all it may set.
+_VARIANT_TOP = {"name", "title", "variant_of", "teacher", "compress", "train", "evaluate", "publish"}
+_TEACHER = {"model", "title", "repo"}
+_COMPRESS = {"max_parameters", "records", "held_out_records", "install_as", "plan"}
+_TRAIN_VARIANT = {"install_as", "epochs", "lr", "weight_decay", "warmup_fraction", "batch_utterances", "grad_accum", "max_frames",
+                  "mtp_weight", "streaming_fraction", "eval_every", "eval_batches", "patience", "keep_best", "distill"}
+_DISTILL = {"gt_weight", "talker_kd_weight", "mtp_kd_weight", "hidden_kd_weight", "kd_temperature"}
+_PARITY = {"teacher_evaluation", "cer_max_delta", "similarity_max_drop", "identity_max_drop", "failure_max_delta"}
+_SPEED = {"sentences", "voice", "warmup"}
 
 
 class RecipeError(ValueError):
@@ -59,10 +69,59 @@ class Recipe:
     def __getitem__(self, key: str) -> Any:
         return self.raw[key]
 
+    @property
+    def is_variant(self) -> bool:
+        """A compact variant of a full model, carved from it and distilled from it."""
+        return "variant_of" in self.raw
+
+    @property
+    def title(self) -> str:
+        """The model's name in its card."""
+        return self.raw.get("title", "Sten-TTS-1.7B")
+
+
+def _load_variant(path: Path, raw: dict) -> Recipe:
+    """A variant over its full recipe: `train` replaces the full recipe's, `evaluate` and `publish` add to theirs."""
+    _require(raw, _VARIANT_TOP, str(path))
+    parent = load(path.parent / raw["variant_of"])
+    if parent.is_variant:
+        raise RecipeError(f"{path}: variant_of names another variant; a variant is carved from a full model")
+    _require(raw["teacher"], _TEACHER, f"{path}: teacher")
+    c = raw["compress"]
+    _require(c, _COMPRESS, f"{path}: compress", optional={"corpus"})
+    if c.get("corpus", "inventory") != "inventory":
+        raise RecipeError(f"{path}: compress.corpus must be `inventory` (the full run's candidate utterance texts) or left out")
+    if not isinstance(c["plan"], list) or not c["plan"] or not all(isinstance(e, dict) and len(e) == 1 for e in c["plan"]):
+        raise RecipeError(f"{path}: compress.plan must be a non-empty list of one-key edits")
+    if not isinstance(c["max_parameters"], int) or c["max_parameters"] <= 0:
+        raise RecipeError(f"{path}: compress.max_parameters must be a positive integer")
+    t = raw["train"]
+    _require(t, _TRAIN_VARIANT, f"{path}: train")
+    _require(t["distill"], _DISTILL, f"{path}: train.distill", optional={"hidden_kd_layers"})
+    if c["install_as"] == t["install_as"]:
+        raise RecipeError(f"{path}: compress.install_as and train.install_as must differ")
+    ev = raw["evaluate"]
+    if not isinstance(ev, dict) or "parity" not in ev:
+        raise RecipeError(f"{path}: evaluate.parity is required: a variant is judged against its full model")
+    _require(ev, {"parity"}, f"{path}: evaluate", optional={"speed"})
+    _require(ev["parity"], _PARITY, f"{path}: evaluate.parity")
+    if "speed" in ev:
+        _require(ev["speed"], _SPEED, f"{path}: evaluate.speed")
+        if ev["speed"]["voice"] not in {v["name"] for v in parent["voices"]}:
+            raise RecipeError(f"{path}: evaluate.speed.voice {ev['speed']['voice']!r} is not a voice")
+    if not isinstance(raw["publish"], dict) or "subfolder" not in raw["publish"]:
+        raise RecipeError(f"{path}: publish.subfolder is required: a variant is published beside its full model")
+    _require(raw["publish"], {"subfolder"}, f"{path}: publish")
+    merged = {**parent.raw, "name": raw["name"], "title": raw["title"], "variant_of": raw["variant_of"], "teacher": raw["teacher"],
+              "compress": c, "train": t, "evaluate": {**parent["evaluate"], **ev}, "publish": {**parent["publish"], **raw["publish"]}}
+    return Recipe(raw=merged, path=path)
+
 
 def load(path: str | Path) -> Recipe:
     path = Path(path)
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if isinstance(raw, dict) and "variant_of" in raw:
+        return _load_variant(path, raw)
     _require(raw, _TOP, str(path), optional=_OPTIONAL_TOP)
     for name in ("base", "judge"):
         _require(raw[name], {"repo", "revision"}, f"{path}: {name}", optional={"license", "served_as"})
@@ -86,8 +145,7 @@ def load(path: str | Path) -> Recipe:
         _require(raw["dataset"], {"repo", "name", "rows_per_shard"}, f"{path}: dataset")
     _require(raw["publish"], {"repo", "private"}, f"{path}: publish", optional={"samples", "subfolder"})
     if "parity" in raw["evaluate"]:
-        _require(raw["evaluate"]["parity"], {"teacher_clips", "cer_max_delta", "similarity_max_drop", "identity_max_drop", "failure_max_delta"},
-                 f"{path}: evaluate.parity")
+        raise RecipeError(f"{path}: evaluate.parity belongs to a variant recipe (one with variant_of)")
     if "samples" in raw["publish"]:
         smp = raw["publish"]["samples"]
         _require(smp, {"seed", "order"}, f"{path}: publish.samples", optional={"sentence"})
@@ -163,6 +221,10 @@ class Workdir:
     @property
     def release(self) -> Path:
         return self.root / "release"
+
+    @property
+    def compress(self) -> Path:
+        return self.root / "compress"
 
     @property
     def evaluation(self) -> Path:

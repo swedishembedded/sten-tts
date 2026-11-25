@@ -87,3 +87,60 @@ def test_a_fleet_run_names_its_cards_and_the_released_checkpoint(tmp_path: Path)
     assert "Training stopped early; the release is the checkpoint with the lowest loss on held-out speech, step 1100 of 1500." in card
     assert "(194,769 utterances) in 30 minutes on 11 GPUs." in card
     assert "## Evaluation" not in card and "error rate" not in card, "an unevaluated release claims no results"
+
+
+VARIANT = RECIPE.parent / "sten-tts-950m.yaml"
+
+
+def _header(path: Path, numel: int) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    header = json.dumps({"w": {"dtype": "BF16", "shape": [numel], "data_offsets": [0, 0]}}).encode()
+    path.write_bytes(len(header).to_bytes(8, "little") + header)
+
+
+def test_a_variant_card_states_its_size_cut_parity_speed_and_how_to_load_it(tmp_path: Path) -> None:
+    rec = config.load(VARIANT)
+    work = config.Workdir(tmp_path)
+    _run_reports(work, rec)
+    names = [v["name"] for v in rec["voices"]]
+    _header(work.release / "model.safetensors", 953_600_000)
+    _header(work.release / "speech_tokenizer" / "model.safetensors", 170_600_000)
+    work.compress.mkdir(parents=True)
+    edits = [{"edit": {"trim_vocabulary": {"vocabulary": "text"}}, "params_before": 1_916_676_352, "params_after": 1_670_615_296, "loss": 2.6726, "kl": 0.0},
+             {"edit": {"select_channels": {"dims": "talker.layers.*.mlp", "keep": 3072, "score": "fisher"}}, "params_before": 1_670_615_296, "params_after": 1_142_100_000, "loss": 2.91, "kl": 0.341},
+             {"edit": {"remove_layers": {"stack": "talker.layers", "count": 6, "by": "kl"}}, "params_before": 1_142_100_000, "params_after": 953_600_000, "loss": 3.2, "kl": 0.62}]
+    kept_layers = [i for i in range(28) if i not in (6, 7, 8, 9, 12, 13)]
+    changes = [({"edit": "trim_vocabulary", "config": {"talker_config.text_vocab_size": [151936, 31789]}, "targets": ["text"]}, "corpus"),
+               ({"edit": "select_channels", "config": {"talker_config.intermediate_size": [6144, 3072]}, "targets": [f"talker.layers.{i}.mlp" for i in range(28)]}, "fisher"),
+               ({"edit": "remove_layers", "config": {"talker_config.num_hidden_layers": [28, 22]}, "kept": {"talker.layers": kept_layers}, "targets": ["talker.layers"]}, "ablation_kl")]
+    (work.compress / "report.json").write_text(json.dumps({"parameters": 953_600_000, "request": {"records": 128, "held_out_records": 128}, "result": {
+        "baseline": {"loss": 2.6726}, "edits": edits, "params_before": 1_916_676_352, "params_after": 953_600_000,
+        "vocabulary": {"kept": 31789, "of": 151676}, "manifest": {"edits": [{"change": c, "method": m} for c, m in changes]}}}))
+    work.evaluation.mkdir(parents=True)
+    sets = {s: {"cer": 0.065, "base_cer": 0.102, "voices": {n: 0.065 for n in names}, "regions": {v["region"]: 0.06 for v in rec["voices"]}, "clips": c * 24}
+            for s, c in (("fleurs", 200), ("code_switching", 60), ("numbers", 40))}
+    par_voices = {n: {"cer": 0.065, "teacher_cer": 0.064, "similarity_drop": 0.004, "identity_drop": 0.0} for n in names}
+    gates = {"failure_rate_max": {"value": 0.0, "threshold": 0.02, "pass": True},
+             "parity_cer_delta_max": {"value": 0.001, "threshold": 0.0025, "pass": True}}
+    (work.evaluation / "report.json").write_text(json.dumps({
+        "gates": gates, "voices": {n: {"cer": 0.065, "similarity": 0.70, "real_similarity": 0.71, "identity_accuracy": 1.0} for n in names},
+        "base": {"cer": 0.102}, "floor": {"cer": 0.147}, "sets": sets, "paired_cer": {"mean_diff": -0.037, "ci95": [-0.049, -0.026], "n": 2400},
+        "upstream": {"status": "ok"}, "parity": {"cer_delta": 0.001, "cer_delta_ci95": [-0.002, 0.004], "failure_delta": 0.0, "voices": par_voices, "clips": 4800,
+                                                "gates": {"cer_delta_max": gates["parity_cer_delta_max"]}}}))
+    (work.evaluation / "speed.json").write_text(json.dumps({"device": "NVIDIA GH200 120GB", "voice": "astrid", "sentences": 20,
+        "variant": {"real_time_factor": 0.21, "frames_per_second": 59.5}, "teacher": {"real_time_factor": 0.30, "frames_per_second": 41.7}, "speedup": 1.43}))
+    report = {"request": {"steps": 6000, "lr": 1e-4}, "ranks": 4, "seconds": 7200,
+              "result": {"checkpoint": "best", "best": {"step": 2400, "held_out_loss": 0.21}, "steps_completed": 3200, "stopped_early": True}}
+    card = modelcard.model_card(rec, work, report)
+
+    assert card.startswith("---\n") and "base_model: swedishembedded/sten-tts" in card.split("---")[1]
+    assert "# Sten-TTS-950M" in card and "953.6 M parameters" in card and "1,916.7 M" in card
+    assert "170.6 M" in card and "shared" in card and "counted separately" in card, "the codec"
+    assert 'allow_patterns="sten-tts-950m/*"' in card and 'f"{path}/sten-tts-950m"' in card, "loading from the subfolder"
+    for frag in ("Trim the text vocabulary to 31,789 of 151,676 tokens", "Keep 3,072 of 6,144 channels in every Talker MLP", "Remove 6 of 28 Talker layers (6, 7, 8, 9, 12 and 13)"):
+        assert frag in card, frag
+    assert "| astrid |" in card and "0.004" in card, "the per-voice parity table"
+    assert "0.21" in card and "59.5" in card and "0.30" in card and "NVIDIA GH200" in card, "measured speed of both"
+    assert "step 2400 of 3200" in card and "4 NVIDIA GH200 GPUs" in card
+    for internal in ("gate", "Pending", "TODO", "teacher", "student"):
+        assert internal not in card, f"{internal!r} is not for the card's reader"
