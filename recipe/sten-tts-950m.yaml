@@ -36,7 +36,7 @@ compress:                                # stage `compress`: brain `speech_surge
 train:                                   # stage `train`: distillation from the teacher on the v2 shards
   install_as: sten-tts-950m
   epochs: 4                              # at most: held-out KL to the teacher picks the checkpoint and stops the run
-  lr: 1.0e-4                             # global batch 16 x cards (128 on 8 cards)
+  lr: 5.0e-5                             # global batch 16 x cards (128 on 8 cards); the best of 1e-5..4e-4 in 150-step probes
   weight_decay: 0.01
   warmup_fraction: 0.03
   batch_utterances: 16                   # per card: with the full model beside it, 32 utterances at 375 frames need ~123 GiB
