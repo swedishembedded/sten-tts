@@ -109,3 +109,30 @@ def test_the_stage_writes_kept_segments_and_resumes_without_recognising_again(tm
     assert audio[rows[1]["file_row"]]["id"] == rows[1]["id"]
     segment.run(recipe, work, pool, concurrency=2, jobs=1)
     assert pool.calls == 2, "recognitions come from the cache on a rerun"
+
+
+def test_recognitions_before_a_failure_are_kept(tmp_path, monkeypatch) -> None:
+    import io
+
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    import pytest
+    import soundfile as sf
+
+    x = _speech([(3, True), (0.5, False), (3, True), (0.5, False), (3, True)])
+    buf = io.BytesIO()
+    sf.write(buf, x, 16000, format="WAV", subtype="PCM_16")
+    path = tmp_path / "data.parquet"
+    pq.write_table(pa.Table.from_pylist([{"audio": {"bytes": buf.getvalue(), "path": None}}]), path)
+    segs = [{"id": f"s{k}", "row": 0, "start": 3.25 * k, "end": 3.25 * (k + 1), "reject": None} for k in range(3)]
+    calls = []
+
+    def flaky(pcm: bytes) -> str:
+        calls.append(len(pcm))
+        if len(calls) == 3:
+            raise RuntimeError("server went away")
+        return "ett"
+
+    with pytest.raises(RuntimeError):
+        segment.recognise(str(path), segs, tmp_path, flaky, concurrency=1)
+    assert len(segment._cached(tmp_path)) == 2

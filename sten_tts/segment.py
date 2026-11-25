@@ -297,18 +297,22 @@ def recognise(path: str, segs: list[dict], cache: Path, transcribe, concurrency:
             slots.release()
 
     futures = []
-    with ThreadPoolExecutor(concurrency) as ex:
-        for row in sorted(by_row):
-            x, rate = chunk_audio(path, row)
-            y = x if rate == ASR_RATE else soxr.resample(x, rate, ASR_RATE)
-            for s in by_row[row]:
-                slots.acquire()
-                pcm = np.asarray(y[int(s["start"] * ASR_RATE) : int(s["end"] * ASR_RATE)], dtype="<f4").tobytes()
-                futures.append(ex.submit(one, s, pcm))
-        for f in futures:
-            f.result()  # a failed request fails the stage; what was recognised is saved below
-    if pending:
-        _save(cache, pending)
+    try:
+        with ThreadPoolExecutor(concurrency) as ex:
+            for row in sorted(by_row):
+                x, rate = chunk_audio(path, row)
+                y = x if rate == ASR_RATE else soxr.resample(x, rate, ASR_RATE)
+                for s in by_row[row]:
+                    slots.acquire()
+                    pcm = np.asarray(y[int(s["start"] * ASR_RATE) : int(s["end"] * ASR_RATE)], dtype="<f4").tobytes()
+                    futures.append(ex.submit(one, s, pcm))
+            for f in futures:
+                f.result()  # a failed request fails the stage
+    finally:
+        with lock:
+            if pending:  # what was recognised before a failure is kept for the rerun
+                _save(cache, pending)
+                pending.clear()
     return done
 
 
