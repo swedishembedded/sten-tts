@@ -59,6 +59,15 @@ sources:
     files: "data/train.clean.100/*"   # English replay at 24 kHz, so English words in Swedish text stay English
     format: libritts-r
 
+segment:                  # stage `segment`: the LibriVox chunks cut into checked utterances
+  source: librivox
+  min_seconds: 2.0
+  max_seconds: 20.0
+  min_pause_seconds: 0.25   # a pause: at least this long ...
+  silence_db: 30.0          # ... this far below the chunk's speech level (95th percentile of 20 ms frame energy)
+  max_cer: 0.10             # the recognition against its aligned span of the book text
+  asr_language: Swedish     # the recogniser (the judge) is told the language
+
 selection:
   hours: 100.0                         # accepted training audio after every filter
   share: {nst: 0.75, rixvox: 0.25}

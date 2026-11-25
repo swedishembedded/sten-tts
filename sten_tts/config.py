@@ -21,6 +21,9 @@ from typing import Any
 import yaml
 
 _TOP = {"name", "seed", "base", "judge", "language", "sources", "selection", "audio", "voices", "train", "evaluate", "publish"}
+# Stages a recipe may leave out (v1 had none of them).
+_OPTIONAL_TOP = {"segment"}
+_SEGMENT = {"source", "min_seconds", "max_seconds", "min_pause_seconds", "silence_db", "max_cer", "asr_language"}
 
 
 class RecipeError(ValueError):
@@ -60,7 +63,7 @@ class Recipe:
 def load(path: str | Path) -> Recipe:
     path = Path(path)
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
-    _require(raw, _TOP, str(path))
+    _require(raw, _TOP, str(path), optional=_OPTIONAL_TOP)
     for name in ("base", "judge"):
         _require(raw[name], {"repo", "revision"}, f"{path}: {name}", optional={"license", "served_as"})
     _require(raw["language"], {"name", "init_from"}, f"{path}: language")
@@ -68,6 +71,13 @@ def load(path: str | Path) -> Recipe:
         _require(spec, {"repo", "revision", "license", "files", "format"}, f"{path}: sources.{src}", optional={"attribution"})
         if len(spec["revision"]) != 40:
             raise RecipeError(f"{path}: sources.{src}.revision must be a full 40-hex commit, got {spec['revision']!r}")
+    if "segment" in raw:
+        seg = raw["segment"]
+        _require(seg, _SEGMENT, f"{path}: segment")
+        if seg["source"] not in raw["sources"]:
+            raise RecipeError(f"{path}: segment.source {seg['source']!r} is not a source")
+        if not 0 < seg["min_seconds"] < seg["max_seconds"]:
+            raise RecipeError(f"{path}: segment: need 0 < min_seconds < max_seconds")
     sel = raw["selection"]
     _require(sel, {"hours", "share", "oversample", "duration_seconds", "nst", "rixvox", "held_out"}, f"{path}: selection")
     if abs(sum(sel["share"].values()) - 1.0) > 1e-9:
@@ -102,6 +112,10 @@ class Workdir:
     @property
     def selection(self) -> Path:
         return self.root / "selection"
+
+    @property
+    def segments(self) -> Path:
+        return self.root / "segments"
 
     @property
     def audio(self) -> Path:
