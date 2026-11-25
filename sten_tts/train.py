@@ -8,7 +8,8 @@
 
 """Run the fine-tune as a served job on the brain server, then collect the release.
 
-The job is `brain/train` action `speech_sft`. The shards travel as blobs; brain
+The job is `brain/train` action `speech_sft`. The shards go to brain's artifact
+store by digest (a D-Bus blob is capped below a full shard); brain
 checks them and the request first (`validate_only`), then trains, exports the
 checkpoint in the upstream layout, publishes its files to its artifact store
 and installs it. This stage copies the published files into `release/`,
@@ -22,6 +23,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import shutil
 import time
 from pathlib import Path
@@ -64,12 +66,28 @@ def request(recipe: Recipe, work: Workdir) -> dict:
 
 
 def _verify(path: Path, digest: str) -> None:
+    got = _blake3(path)
+    if got != digest:
+        raise RuntimeError(f"{path}: blake3 {got} is not the published {digest}")
+
+
+def _blake3(path: Path) -> str:
     h = blake3.blake3()
     with path.open("rb") as fh:
         for chunk in iter(lambda: fh.read(1 << 24), b""):
             h.update(chunk)
-    if h.hexdigest() != digest:
-        raise RuntimeError(f"{path}: blake3 {h.hexdigest()} is not the published {digest}")
+    return h.hexdigest()
+
+
+def publish_by_digest(path: Path, artifacts: Path) -> str:
+    """Put `path` in the server's artifact store as `<blake3 hex>` (written under a temporary name, then renamed)."""
+    digest = _blake3(path)
+    dst = artifacts / digest
+    if not dst.exists():
+        tmp = artifacts / f".{digest}.{os.getpid()}.partial"
+        shutil.copyfile(path, tmp)
+        os.rename(tmp, dst)
+    return digest
 
 
 def collect(artifacts: Path, checkpoint_digest: str, release: Path) -> list[dict]:
@@ -101,7 +119,11 @@ def run(recipe: Recipe, work: Workdir, pool: BrainPool, artifacts: Path, allow_c
     params = request(recipe, work)
     if allow_cpu:
         params["allow_cpu"] = True
-    blobs = {"dataset": (work.shards / "train.bttshrd").read_bytes(), "held_out": (work.shards / "validation.bttshrd").read_bytes()}
+    # The shards go through the artifact store by digest: a D-Bus blob is capped
+    # (256 MiB) below a 100-hour shard, and the server verifies each by its hash.
+    params["dataset_digest"] = publish_by_digest(work.shards / "train.bttshrd", artifacts)
+    params["held_out_digest"] = publish_by_digest(work.shards / "validation.bttshrd", artifacts)
+    blobs: dict = {}
     plan = brain.run("brain/train", "speech_sft", {**params, "validate_only": True}, blobs=blobs, timeout=3600).outputs
     print("train: brain accepts the job:", json.dumps(plan), flush=True)
 
