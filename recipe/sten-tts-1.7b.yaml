@@ -86,7 +86,7 @@ voices:
   - {name: axel,   gender: male,   region: Dalarna med omnejd}
 
 train:
-  install_as: swedishembedded/sten-tts-1.7b
+  install_as: sten-tts-1.7b            # installed in brain's model store as local/sten-tts-1.7b
   resume_key: sten-tts-1.7b-v1
   epochs: 3
   lr: 1.0e-5
