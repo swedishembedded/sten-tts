@@ -20,7 +20,9 @@ server answers in, so the shards are reproducible.
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -75,7 +77,6 @@ def _encode_missing(clips: list[dict], cache: Path, split: str, encode, concurre
     done = _cached(cache, split)
     todo = [c for c in clips if c["id"] not in done]
     print(f"shards {split}: {len(done)} cached, {len(todo)} to encode", flush=True)
-    n = len(list(cache.glob(f"{split}-*.parquet")))
     with ThreadPoolExecutor(concurrency) as ex:
         for lo in range(0, len(todo), CHUNK):
             part = todo[lo : lo + CHUNK]
@@ -85,10 +86,11 @@ def _encode_missing(clips: list[dict], cache: Path, split: str, encode, concurre
                 rows.append({"id": c["id"], "codes": np.asarray(enc.codes, "<u2").tobytes(), "xvector": np.asarray(enc.xvector, "<f4").tobytes(),
                              "text_ids": np.asarray(enc.text_ids, "<u4").tobytes(), "frames": enc.frames, "codebooks": enc.codebooks,
                              "frame_rate": enc.frame_rate, "producers": json.dumps(enc.producers, sort_keys=True)})
-            tmp = cache / f".{split}-{n:05d}.parquet"
+            # Named by their content, so runs sharing a cache never write the same file.
+            name = f"{split}-{hashlib.blake2b(''.join(r['id'] for r in rows).encode(), digest_size=8).hexdigest()}"
+            tmp = cache / f".{name}.{os.getpid()}.parquet"
             pq.write_table(pa.Table.from_pylist(rows), tmp)
-            tmp.rename(cache / f"{split}-{n:05d}.parquet")
-            n += 1
+            tmp.rename(cache / f"{name}.parquet")
             done.update({r["id"]: r for r in rows})
             print(f"shards {split}: {len(done)}/{len(clips)} encoded", flush=True)
     return done
