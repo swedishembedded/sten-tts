@@ -26,7 +26,7 @@ DEFAULT_RECIPE = Path(__file__).resolve().parents[1] / "recipe" / "sten-tts-1.7b
 
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="sten-tts", description=__doc__)
-    p.add_argument("stage", choices=["fetch", "segment", "inventory", "voices", "select", "audio", "shards", "train", "evaluate", "publish"])
+    p.add_argument("stage", choices=["fetch", "segment", "inventory", "voices", "select", "audio", "shards", "train", "evaluate", "publish", "export", "publish-dataset"])
     p.add_argument("--workdir", required=True, type=Path, help="where this run's data, shards, checkpoints and reports live")
     p.add_argument("--recipe", type=Path, default=DEFAULT_RECIPE)
     p.add_argument("--jobs", type=int, default=min(32, os.cpu_count() or 1), help="worker processes for host-side stages")
@@ -42,7 +42,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--artifact-store", type=Path, help="train: the brain server's --artifact-store directory, where the checkpoint is published")
     p.add_argument("--allow-cpu", action="store_true", help="train: let the fine-tune run on the CPU backend (a smoke run; far too slow for the release)")
     p.add_argument("--upstream-python", type=Path, help="evaluate: an interpreter with torch and qwen-tts, to check the release loads upstream")
-    p.add_argument("--hub-dir", type=Path, help="publish: a local mirror of the Hugging Face repository to copy the release into first")
+    p.add_argument("--hub-dir", type=Path, help="publish, publish-dataset: a local mirror of the Hugging Face repository to copy the release (or the export) into first")
     p.add_argument("--dry-run", action="store_true", help="publish: check everything, upload nothing")
     a = p.parse_args(argv)
     recipe = config.load(a.recipe)
@@ -79,6 +79,12 @@ def main(argv: list[str] | None = None) -> None:
     elif a.stage == "evaluate":
         from . import brainclient, evaluate
         print(json.dumps(evaluate.run(recipe, work, brainclient.connect(a.brain_transport, a.brain_bus or ["session"], a.brain_key_file, a.brain_ca_file), a.concurrency, a.upstream_python), indent=1))
+    elif a.stage == "export":
+        from . import export
+        print(json.dumps(export.run(recipe, work, a.jobs), indent=1))
+    elif a.stage == "publish-dataset":
+        from . import publish_dataset
+        print(json.dumps(publish_dataset.run(recipe, work, a.hub_dir), indent=1))
     elif a.stage == "publish":
         from . import publish
         publish.run(recipe, work, a.dry_run, a.hub_dir)

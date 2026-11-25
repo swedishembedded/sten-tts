@@ -22,7 +22,7 @@ import yaml
 
 _TOP = {"name", "seed", "base", "judge", "language", "sources", "selection", "audio", "voices", "train", "evaluate", "publish"}
 # Stages a recipe may leave out (v1 had none of them).
-_OPTIONAL_TOP = {"segment", "liveliness"}
+_OPTIONAL_TOP = {"segment", "liveliness", "dataset"}
 _SEGMENT = {"source", "min_seconds", "max_seconds", "min_pause_seconds", "silence_db", "max_cer", "asr_language"}
 
 
@@ -82,6 +82,8 @@ def load(path: str | Path) -> Recipe:
         live = raw["liveliness"]
         _require(live, {"min_minutes", "utterances", "weights"}, f"{path}: liveliness")
         _require(live["weights"], {"f0_range", "f0_sd", "energy_sd", "syllable_rate"}, f"{path}: liveliness.weights")
+    if "dataset" in raw:
+        _require(raw["dataset"], {"repo", "name", "rows_per_shard"}, f"{path}: dataset")
     sel = raw["selection"]
     if not isinstance(sel, dict) or not isinstance(sel.get("share"), dict):
         raise RecipeError(f"{path}: selection.share must be a mapping of source to share")

@@ -20,7 +20,7 @@ UPSTREAM_PYTHON ?=
 STEN := $(PYTHON) -m sten_tts.cli
 ARGS = --workdir "$(WORKDIR)" --recipe "$(RECIPE)"
 
-.PHONY: help env test all fetch segment inventory voices select audio shards train evaluate publish check-workdir
+.PHONY: help env test all fetch segment inventory voices select audio shards train evaluate publish export publish-dataset check-workdir
 
 ## help - list the targets
 help:
@@ -80,3 +80,11 @@ evaluate: check-workdir
 ## publish - upload the release to its private Hugging Face repository (HUB_DIR: a local mirror)
 publish: check-workdir
 	$(STEN) publish $(ARGS) $(if $(HUB_DIR),--hub-dir "$(HUB_DIR)")
+
+## export - the training collection as a Hugging Face dataset in WORKDIR/export (FLAC in parquet, card, terms)
+export: check-workdir
+	$(STEN) export $(ARGS) --jobs $(JOBS)
+
+## publish-dataset - upload the export private, verify it on the hub, then make it public (HUB_DIR: a durable local copy)
+publish-dataset: check-workdir
+	$(STEN) publish-dataset $(ARGS) $(if $(HUB_DIR),--hub-dir "$(HUB_DIR)")

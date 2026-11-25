@@ -154,6 +154,11 @@ evaluate:
     voice_identity_accuracy_min: 0.90  # nearest-voice identification among the twelve
     failure_rate_max: 0.02             # clips that hit the length cap, are silent or loop
 
+dataset:                               # stages `export` and `publish-dataset`: the training collection as a public dataset
+  repo: swedishembedded/sten-tts-voice
+  name: Sten-TTS Voice
+  rows_per_shard: 6000                 # ~0.8 GB of FLAC per parquet file
+
 publish:
   repo: swedishembedded/sten-tts          # the local mirror of this repository is given to `publish --hub-dir`
   private: true

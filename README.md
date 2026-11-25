@@ -259,6 +259,8 @@ Each stage is also `python -m sten_tts.cli <stage> --workdir DIR` (see
 | `train` | `shards/`, the brain server | the job's events in `train/events.jsonl`, `release/` (the checkpoint), `train/report.json` |
 | `evaluate` | `release/`, the brain server | `evaluation/clips/`, `evaluation/report.json` with every gate |
 | `publish` | `release/`, `evaluation/report.json` | the private Hugging Face repository |
+| `export` | `selection/`, `audio/`, `segments/report.json` | `export/`: the training collection as a Hugging Face dataset (`data/<split>-*.parquet` with FLAC audio, `README.md` card, `TERMS.md`, `voices.json`, `reports/`, `manifest.json`) |
+| `publish-dataset` | `export/` | the dataset repository: created private, uploaded, checked file for file and row for row against the manifest, then made public |
 
 ### Selection, in short
 
