@@ -21,7 +21,7 @@ from pathlib import Path
 
 from . import config
 
-DEFAULT_RECIPE = Path(__file__).resolve().parents[1] / "recipe" / "sten-tts-1.7b.yaml"
+DEFAULT_RECIPE = Path(__file__).resolve().parents[1] / "recipe" / "sten-tts-1.7b-v2.yaml"
 
 
 def main(argv: list[str] | None = None) -> None:

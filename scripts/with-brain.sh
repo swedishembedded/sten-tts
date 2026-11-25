@@ -21,7 +21,7 @@
 # DIR/brain-serve-N.log.
 set -euo pipefail
 
-brain= workdir= recipe=recipe/sten-tts-1.7b.yaml data_dir= python=.venv/bin/python upstream= allow_cpu= concurrency= stages=() devices=()
+brain= workdir= recipe=recipe/sten-tts-1.7b-v2.yaml data_dir= python=.venv/bin/python upstream= allow_cpu= concurrency= stages=() devices=()
 while [ $# -gt 0 ]; do
     case "$1" in
         --brain) brain=$2; shift 2 ;;
