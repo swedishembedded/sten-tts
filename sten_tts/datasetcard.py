@@ -107,7 +107,7 @@ def card(recipe: Recipe, manifest: dict, voices: dict, segment_report: dict | No
     return f"""---
 license: other
 license_name: sten-tts-voice-terms
-license_link: TERMS.md
+license_link: https://huggingface.co/datasets/{recipe['dataset']['repo']}/blob/main/TERMS.md
 language:
 - sv
 - en
