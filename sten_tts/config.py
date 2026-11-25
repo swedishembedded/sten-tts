@@ -62,7 +62,7 @@ def load(path: str | Path) -> Recipe:
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     _require(raw, _TOP, str(path))
     for name in ("base", "judge"):
-        _require(raw[name], {"repo", "revision"}, f"{path}: {name}", optional={"license"})
+        _require(raw[name], {"repo", "revision"}, f"{path}: {name}", optional={"license", "served_as"})
     _require(raw["language"], {"name", "init_from"}, f"{path}: language")
     for src, spec in raw["sources"].items():
         _require(spec, {"repo", "revision", "license", "files", "format"}, f"{path}: sources.{src}", optional={"attribution"})
