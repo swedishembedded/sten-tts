@@ -36,16 +36,18 @@ def test_an_interrupted_encode_resumes_from_its_cache(tmp_path, monkeypatch) -> 
     clips = [{"id": f"c{i}"} for i in range(8)]
     calls = []
 
-    def flaky(c):
+    monkeypatch.setattr(shards, "CLIPS_PER_REQUEST", 1)
+
+    def flaky(group):
         if len(calls) == 5:
             raise RuntimeError("server went away")
-        calls.append(c["id"])
-        return _Enc(int(c["id"][1:]))
+        calls.extend(c["id"] for c in group)
+        return [_Enc(int(c["id"][1:])) for c in group]
 
     with pytest.raises(RuntimeError):
         shards._encode_missing(clips, tmp_path, "train", flaky, concurrency=1)
     first = set(calls)
     calls.clear()
-    done = shards._encode_missing(clips, tmp_path, "train", lambda c: (calls.append(c["id"]), _Enc(int(c["id"][1:])))[1], concurrency=1)
+    done = shards._encode_missing(clips, tmp_path, "train", lambda g: [(calls.append(c["id"]), _Enc(int(c["id"][1:])))[1] for c in g], concurrency=1)
     assert set(done) == {c["id"] for c in clips}
     assert len(first) >= 3 and not set(calls) & {f"c{i}" for i in range(3)}, "the saved chunk is not encoded again"

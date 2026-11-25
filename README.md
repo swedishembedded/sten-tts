@@ -94,14 +94,14 @@ default data directory.
 WORK=/fast/disk/sten-run                 # the recipe's work directory; any disk with ~200 GB
 mkdir -p "$WORK/artifacts"
 dbus-run-session -- bash                 # on a headless machine: a session bus for server and recipe
-./target/release/brain serve --dbus --training --artifact-store "$WORK/artifacts" --device gpu0 &
+./target/release/brain serve --dbus --training --artifact-store "$WORK/artifacts" --device gpu0,cpu &
 ```
 
 - `--training` turns on the `brain/train` job service; without it `train` is refused.
 - `--artifact-store DIR` is where brain keeps shards it is handed, its run state
   (for resuming) and the checkpoint files it publishes. The recipe's `train`
   stage is given the same directory to collect the release from.
-- `--device gpu0` pins the server to one card; leave it out to let brain choose.
+- `--device gpu0,cpu` pins the server to one card (and the host for host-side work); leave it out to let brain choose.
 - Run the recipe in the same D-Bus session (the shell `dbus-run-session` opened).
 
 ### 4. Prepare the data and encode it with brain
@@ -112,15 +112,18 @@ make fetch inventory select audio WORKDIR="$WORK" JOBS=16
 make shards WORKDIR="$WORK" CONCURRENCY=8
 ```
 
-`shards` sends every kept clip (a 16-bit WAV at its source rate, with its
-transcript) to the Qwen3-TTS model's `encode` action and gets back its
+`shards` sends the kept clips (16-bit WAVs at their source rate, with their
+transcripts), 32 to a request, to the Qwen3-TTS model's `encode` action, which
+encodes each request's clips in one batch on the card, and gets back each clip's
 `[frames, 16]` codec codes, the speaker encoder's x-vector and the token ids of
 `<|im_start|>assistant\n{text}<|im_end|>\n<|im_start|>assistant\n` from the
 checkpoint's own tokenizer. It cuts the training set at exactly 100 hours
 (the named voices first, then by the seed's order) and writes
-`shards/train.bttshrd` and `shards/validation.bttshrd`. On the CPU backend
-encoding runs at about 6.7 audio seconds per second with four streams (about
-15 hours for the corpus); on a GPU it is much faster.
+`shards/train.bttshrd` and `shards/validation.bttshrd`. On one GH200 the
+encode runs at about 700 audio seconds per second with 8 requests in flight,
+about 9 minutes for the corpus. Results are saved every 2000 clips in
+`shards/cache/`, so an interrupted run resumes; delete that directory when
+brain's encoder changes, since the cache does not know which build made it.
 
 ### 5. Train
 

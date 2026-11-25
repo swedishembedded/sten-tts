@@ -58,6 +58,8 @@ def cut(clips: list[dict], meta: dict[str, dict], hours: float, seed: int) -> li
 
 
 CHUNK = 2000
+# Clips per encode request: the server encodes every clip of a request in one device batch.
+CLIPS_PER_REQUEST = 32
 
 
 def _cached(cache: Path, split: str) -> dict[str, dict]:
@@ -69,7 +71,7 @@ def _cached(cache: Path, split: str) -> dict[str, dict]:
 
 
 def _encode_missing(clips: list[dict], cache: Path, split: str, encode, concurrency: int) -> dict[str, dict]:
-    """Encode every clip not cached yet, saving every CHUNK results, so an interrupted run resumes."""
+    """Encode every clip not cached yet, CLIPS_PER_REQUEST to a request, saving every CHUNK results so an interrupted run resumes."""
     done = _cached(cache, split)
     todo = [c for c in clips if c["id"] not in done]
     print(f"shards {split}: {len(done)} cached, {len(todo)} to encode", flush=True)
@@ -77,8 +79,9 @@ def _encode_missing(clips: list[dict], cache: Path, split: str, encode, concurre
     with ThreadPoolExecutor(concurrency) as ex:
         for lo in range(0, len(todo), CHUNK):
             part = todo[lo : lo + CHUNK]
+            groups = [part[i : i + CLIPS_PER_REQUEST] for i in range(0, len(part), CLIPS_PER_REQUEST)]
             rows = []
-            for c, enc in zip(part, ex.map(encode, part)):
+            for c, enc in zip(part, (e for batch in ex.map(encode, groups) for e in batch)):
                 rows.append({"id": c["id"], "codes": np.asarray(enc.codes, "<u2").tobytes(), "xvector": np.asarray(enc.xvector, "<f4").tobytes(),
                              "text_ids": np.asarray(enc.text_ids, "<u4").tobytes(), "frames": enc.frames, "codebooks": enc.codebooks,
                              "frame_rate": enc.frame_rate, "producers": json.dumps(enc.producers, sort_keys=True)})
@@ -110,8 +113,8 @@ def build(recipe: Recipe, work: Workdir, pool: BrainPool, concurrency: int) -> d
         if split == "train":
             clips = cut(clips, meta, recipe["selection"]["hours"], recipe.seed)
 
-        def encode(c: dict):
-            return pool.get().encode_audio(c["wav"], meta[c["id"]]["text"], model=model)
+        def encode(group: list[dict]):
+            return pool.get().encode_audio_batch([c["wav"] for c in group], [meta[c["id"]]["text"] for c in group], model=model)
 
         enc = _encode_missing(clips, cache, split, encode, concurrency)
         producers = {enc[c["id"]]["producers"] for c in clips}
