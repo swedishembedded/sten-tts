@@ -33,3 +33,14 @@ def test_bad_clips_are_rejected_with_the_reason() -> None:
     for x, why in ((clipped, "clipped"), (quiet, "quiet"), (noisy, "noisy")):
         y, m = audio.measure_and_trim(x, RATE, CFG)
         assert y is None and m["reject"] == why, (why, m)
+
+
+def test_parquet_rows_are_read_from_their_row_groups_only(tmp_path) -> None:
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+
+    from sten_tts import audio
+
+    path = tmp_path / "a.parquet"
+    pq.write_table(pa.Table.from_pylist([{"audio": {"bytes": bytes([i]), "path": None}} for i in range(7)]), path, row_group_size=2)
+    assert audio._load_rows(path, "parquet", [5, 0, 3]) == [bytes([5]), bytes([0]), bytes([3])]

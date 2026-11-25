@@ -18,6 +18,7 @@ Resampling to the model's rate is the model server's job.
 
 from __future__ import annotations
 
+import bisect
 import io
 import json
 from collections import defaultdict
@@ -84,11 +85,28 @@ def _load_rows(path: Path, fmt: str, rows: list[int]) -> list[bytes]:
         wanted = set(rows)
         found = {k: data for k, _, data in fleurs_members(path) if k in wanted}
         return [found[i] for i in rows]
-    if fmt == "librivox-chunks":
-        t = pq.read_table(path, columns=["wav"]).column("wav")
-        return [t[i].as_py() for i in rows]
-    t = pq.read_table(path, columns=["audio"]).column("audio")
-    return [t[i]["bytes"].as_py() for i in rows]
+    column = "wav" if fmt == "librivox-chunks" else "audio"
+    return [v if isinstance(v, bytes) else v["bytes"] for v in _parquet_rows(path, column, rows)]
+
+
+def _parquet_rows(path: Path, column: str, rows: list[int]) -> list:
+    """The values of `column` at `rows`, reading only the row groups that hold them (a RixVox
+    shard is 2.9 GB; a worker never holds more than one row group of it)."""
+    f = pq.ParquetFile(path)
+    starts = [0]
+    for g in range(f.num_row_groups):
+        starts.append(starts[-1] + f.metadata.row_group(g).num_rows)
+    by_group: dict[int, list[int]] = defaultdict(list)
+    for i in rows:
+        if not 0 <= i < starts[-1]:
+            raise IndexError(f"{path}: row {i} of {starts[-1]}")
+        by_group[bisect.bisect_right(starts, i) - 1].append(i)
+    found = {}
+    for g, wanted in sorted(by_group.items()):
+        col = f.read_row_group(g, columns=[column]).column(column)
+        for i in wanted:
+            found[i] = col[i - starts[g]].as_py()
+    return [found[i] for i in rows]
 
 
 def _process_file(args: tuple) -> tuple[list[dict], list[dict]]:
