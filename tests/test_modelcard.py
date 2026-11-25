@@ -115,7 +115,7 @@ def test_a_variant_card_states_its_size_cut_parity_speed_and_how_to_load_it(tmp_
                ({"edit": "remove_layers", "config": {"talker_config.num_hidden_layers": [28, 22]}, "kept": {"talker.layers": kept_layers}, "targets": ["talker.layers"]}, "ablation_kl")]
     (work.compress / "report.json").write_text(json.dumps({"parameters": 953_600_000, "request": {"records": 128, "held_out_records": 128}, "result": {
         "baseline": {"loss": 2.6726}, "edits": edits, "params_before": 1_916_676_352, "params_after": 953_600_000,
-        "vocabulary": {"kept": 31789, "of": 151676}, "manifest": {"edits": [{"change": c, "method": m} for c, m in changes]}}}))
+        "vocabulary": {"kept": 31789, "of": 151676}, "manifest": {"manifest": {"edits": [{"change": c, "method": m} for c, m in changes]}}}}))
     work.evaluation.mkdir(parents=True)
     sets = {s: {"cer": 0.065, "base_cer": 0.102, "voices": {n: 0.065 for n in names}, "regions": {v["region"]: 0.06 for v in rec["voices"]}, "clips": c * 24}
             for s, c in (("fleurs", 200), ("code_switching", 60), ("numbers", 40))}

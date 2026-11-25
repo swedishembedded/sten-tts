@@ -68,7 +68,7 @@ def describe(change: dict, method: str, vocabulary: dict) -> str:
 
 def _cut(recipe: Recipe, compress: dict) -> str:
     out = compress["result"]
-    manifest = out["manifest"]["edits"]
+    manifest = out["manifest"]["manifest"]["edits"]  # the job reports surgery.json: {"manifest", "outcome"}
     rows = ["| edit | parameters after | loss | KL to the full model |", "|---|---|---|---|",
             f"| the full model | {_m(out['params_before'])} | {out['baseline']['loss']:.3f} | 0 |"]
     for entry, measured in zip(manifest, out["edits"]):
