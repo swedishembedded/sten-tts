@@ -34,7 +34,10 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--brain-transport", choices=["dbus", "jsonl"], default="dbus", help="how brain-py reaches the brain server")
     p.add_argument("--brain-bus", action="append", metavar="BUS",
                    help="a D-Bus bus a brain server is on: session (the default), system or an address (unix:path=...); "
-                        "repeat it to spread a stage's requests over several servers (training uses the first)")
+                        "repeat it to spread a stage's requests over several servers (training uses the first); "
+                        "https://host:port names a server on another machine")
+    p.add_argument("--brain-key-file", type=Path, help="the API key of the https:// brain servers (a file holding it)")
+    p.add_argument("--brain-ca-file", type=Path, help="the certificate the https:// brain servers present, when not signed by a system CA")
     p.add_argument("--concurrency", type=int, default=8, help="requests in flight to the brain server")
     p.add_argument("--artifact-store", type=Path, help="train: the brain server's --artifact-store directory, where the checkpoint is published")
     p.add_argument("--allow-cpu", action="store_true", help="train: let the fine-tune run on the CPU backend (a smoke run; far too slow for the release)")
@@ -51,7 +54,7 @@ def main(argv: list[str] | None = None) -> None:
         fetch.fetch(recipe, work, a.only, a.jobs)
     elif a.stage == "segment":
         from . import brainclient, segment
-        print(json.dumps(segment.run(recipe, work, brainclient.connect(a.brain_transport, a.brain_bus or ["session"]), a.concurrency, a.jobs), indent=1))
+        print(json.dumps(segment.run(recipe, work, brainclient.connect(a.brain_transport, a.brain_bus or ["session"], a.brain_key_file, a.brain_ca_file), a.concurrency, a.jobs), indent=1))
     elif a.stage == "inventory":
         from . import inventory
         inventory.build(recipe, work, a.jobs, a.only)
@@ -67,15 +70,15 @@ def main(argv: list[str] | None = None) -> None:
         print(json.dumps(audio.process(recipe, work, a.jobs), indent=1))
     elif a.stage == "shards":
         from . import brainclient, shards
-        print(json.dumps(shards.build(recipe, work, brainclient.connect(a.brain_transport, a.brain_bus or ["session"]), a.concurrency), indent=1))
+        print(json.dumps(shards.build(recipe, work, brainclient.connect(a.brain_transport, a.brain_bus or ["session"], a.brain_key_file, a.brain_ca_file), a.concurrency), indent=1))
     elif a.stage == "train":
         from . import brainclient, train
         if a.artifact_store is None:
             p.error("train needs --artifact-store (the brain server's artifact store directory)")
-        print(json.dumps(train.run(recipe, work, brainclient.connect(a.brain_transport, a.brain_bus or ["session"]), a.artifact_store, a.allow_cpu), indent=1, ensure_ascii=False))
+        print(json.dumps(train.run(recipe, work, brainclient.connect(a.brain_transport, a.brain_bus or ["session"], a.brain_key_file, a.brain_ca_file), a.artifact_store, a.allow_cpu), indent=1, ensure_ascii=False))
     elif a.stage == "evaluate":
         from . import brainclient, evaluate
-        print(json.dumps(evaluate.run(recipe, work, brainclient.connect(a.brain_transport, a.brain_bus or ["session"]), a.concurrency, a.upstream_python), indent=1))
+        print(json.dumps(evaluate.run(recipe, work, brainclient.connect(a.brain_transport, a.brain_bus or ["session"], a.brain_key_file, a.brain_ca_file), a.concurrency, a.upstream_python), indent=1))
     elif a.stage == "publish":
         from . import publish
         publish.run(recipe, work, a.dry_run, a.hub_dir)
