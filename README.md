@@ -311,7 +311,18 @@ The judge is Qwen3-ASR-1.7B served by brain. The gates, all in the recipe:
 | `upstream_loads` | the release loads in upstream `qwen-tts` and speaks Swedish with a named voice |
 
 The recogniser's own CER on the real held-out recordings is reported beside
-these as the floor that synthesised speech is compared against. `publish`
+these as the floor that synthesised speech is compared against.
+
+Besides FLEURS, every voice (and the base, for comparison) reads two
+committed, hand-written sets that test v1's failures, scored the same way:
+`recipe/evalsets/code-switching.tsv` (60 Swedish sentences with English words,
+names and brands: technical, everyday, products) and
+`recipe/evalsets/numbers.tsv` (40 with numbers, dates, times, units and
+abbreviations, each with its spoken form; a clip counts against whichever of
+the two forms the recogniser's transcript is closer to). Their texts never
+train. `evaluation/report.json` has, under `sets`, the CER of each set overall,
+for the base, per voice and per region, and the model card shows the per-voice
+and per-region tables. `publish`
 refuses unless every gate passed.
 
 ## Status

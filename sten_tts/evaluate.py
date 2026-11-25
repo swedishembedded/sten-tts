@@ -11,7 +11,10 @@ Everything is measured by models the training never touched, all served by
 the brain server:
 
 * every voice reads the evaluation sentences with each seed (`design` with the
-  voice as preset speaker and `swedish` as language);
+  voice as preset speaker and `swedish` as language): the FLEURS test
+  sentences, which the gates are computed on, and the recipe's committed sets
+  (English words in Swedish text, numbers and abbreviations), reported per
+  set, per voice and per region;
 * the base reads the same sentences, cloning each voice from one of its
   held-out recordings (x-vector), with the language left to `auto`;
 * the recogniser transcribes every clip, and the real held-out recordings of the
@@ -71,6 +74,33 @@ def failure(wav: bytes, text: str, cap_seconds: float) -> str | None:
     return None
 
 
+def best_cer(references: list[str], heard: str) -> float:
+    """CER against the closest of a sentence's references (the written text, or its spoken form)."""
+    return min(metrics.cer(r, heard) for r in references)
+
+
+def per_set(rows: list[dict], region_of: dict[str, str]) -> dict[str, dict]:
+    """Mean CER per evaluation set: overall, the base's, per voice and per region (Sten's clips)."""
+    out = {}
+    for name in sorted({r["set"] for r in rows}):
+        st = [r for r in rows if r["set"] == name and r["system"] == "sten"]
+        bs = [r for r in rows if r["set"] == name and r["system"] == "base"]
+        voices = sorted({r["voice"] for r in st})
+        regions = sorted({region_of[v] for v in voices})
+        out[name] = {"cer": float(np.mean([r["cer"] for r in st])), "base_cer": float(np.mean([r["cer"] for r in bs])) if bs else None,
+                     "voices": {v: float(np.mean([r["cer"] for r in st if r["voice"] == v])) for v in voices},
+                     "regions": {g: float(np.mean([r["cer"] for r in st if region_of[r["voice"]] == g])) for g in regions},
+                     "clips": len(st)}
+    return out
+
+
+def _sentences(work: Workdir) -> dict[str, list[dict]]:
+    data = json.loads((work.evaluation / "sentences.json").read_text())
+    if isinstance(data, list):  # written before the committed sets existed: FLEURS only
+        data = {"fleurs": data}
+    return {name: [{**s, "references": s.get("references", [s["text"]])} for s in items] for name, items in data.items()}
+
+
 def _voice_refs(work: Workdir) -> dict[str, list[dict]]:
     sel = {r["id"]: r for r in pq.read_table(work.selection / "selection.parquet").to_pylist() if r["split"] == "voice_test"}
     refs = defaultdict(list)
@@ -86,7 +116,9 @@ def run(recipe: Recipe, work: Workdir, pool: BrainPool, concurrency: int, upstre
     base, judge = recipe["base"]["repo"], recipe["judge"].get("served_as", recipe["judge"]["repo"])
     for model, action in ((sten, "design"), (base, "clone"), (base, "encode"), (judge, "transcribe")):
         pool.require_model(model, action)
-    sentences = json.loads((work.evaluation / "sentences.json").read_text())
+    sets = _sentences(work)
+    sentences = sets["fleurs"]
+    region_of = {v["name"]: v["region"] for v in recipe["voices"]}
     refs = _voice_refs(work)
     voices = [v["name"] for v in recipe["voices"]]
     cap = recipe["train"]["max_frames"] / 12.5
@@ -113,11 +145,11 @@ def run(recipe: Recipe, work: Workdir, pool: BrainPool, concurrency: int, upstre
         xs = [x for (vv, _), x in zip(held, held_x) if vv == v]
         real_similarity[v] = float(np.median([metrics.cosine(x, np.mean([y for j, y in enumerate(xs) if j != i], axis=0).tolist()) for i, x in enumerate(xs)]))
 
-    jobs = [("sten", v, s, seed) for v in voices for s in sentences for seed in ev["seeds"]]
-    jobs += [("base", v, s, ev["seeds"][0]) for v in voices for s in sentences]
+    jobs = [("sten", v, name, s, seed) for name, items in sets.items() for v in voices for s in items for seed in ev["seeds"]]
+    jobs += [("base", v, name, s, ev["seeds"][0]) for name, items in sets.items() for v in voices for s in items]
 
     def one(job):
-        system, voice, sent, seed = job
+        system, voice, set_name, sent, seed = job
         b = pool.get()
         if system == "sten":
             out = b.run(sten, "design", {"text": sent["text"], "speaker": voice, "lang": lang, "seed": seed})
@@ -128,8 +160,8 @@ def run(recipe: Recipe, work: Workdir, pool: BrainPool, concurrency: int, upstre
         heard = transcribe(wav)
         x = xvector(wav)
         sims = {v: metrics.cosine(x, centroid[v]) for v in voices}
-        return {"system": system, "voice": voice, "sentence": sent["id"], "seed": seed, "text": sent["text"], "heard": heard,
-                "cer": metrics.cer(sent["text"], heard), "similarity": sims[voice], "nearest": max(sims, key=sims.get),
+        return {"system": system, "voice": voice, "set": set_name, "sentence": sent["id"], "seed": seed, "text": sent["text"], "heard": heard,
+                "cer": best_cer(sent["references"], heard), "similarity": sims[voice], "nearest": max(sims, key=sims.get),
                 "failure": failure(wav, sent["text"], cap), "wav": wav}
 
     rows = []
@@ -141,8 +173,9 @@ def run(recipe: Recipe, work: Workdir, pool: BrainPool, concurrency: int, upstre
     work.evaluation.mkdir(parents=True, exist_ok=True)
     pq.write_table(pa.Table.from_pylist(rows), work.evaluation / "clips.parquet")
 
-    st = [r for r in rows if r["system"] == "sten"]
-    bs = [r for r in rows if r["system"] == "base"]
+    # The gates are judged on the FLEURS sentences; the committed sets are reported beside them.
+    st = [r for r in rows if r["system"] == "sten" and r["set"] == "fleurs"]
+    bs = [r for r in rows if r["system"] == "base" and r["set"] == "fleurs"]
     per_voice = {v: {"cer": float(np.mean([r["cer"] for r in st if r["voice"] == v])),
                      "similarity": float(np.mean([r["similarity"] for r in st if r["voice"] == v])),
                      "real_similarity": real_similarity[v],
@@ -171,7 +204,7 @@ def run(recipe: Recipe, work: Workdir, pool: BrainPool, concurrency: int, upstre
     }
     report = {"gates": gates, "voices": per_voice, "base": {"cer": float(np.mean([r["cer"] for r in bs]))}, "floor": {"cer": floor},
               "paired_cer": paired, "failures": {k: sum(1 for r in st if r["failure"] == k) for k in ("silent", "length_cap", "too_long")},
-              "upstream": upstream, "clips": len(rows)}
+              "upstream": upstream, "clips": len(rows), "sets": per_set(rows, region_of)}
     (work.evaluation / "report.json").write_text(json.dumps(report, indent=1, ensure_ascii=False))
     train_report = json.loads((work.train / "report.json").read_text())
     (work.release / "README.md").write_text(model_card(recipe, work, train_report))

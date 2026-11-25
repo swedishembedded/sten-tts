@@ -142,6 +142,9 @@ train:
 
 evaluate:
   fleurs_sentences: 200                # FLEURS sv_se test sentences, read by every voice
+  sets:                                # committed, hand-written sets, read by every voice and scored the same way (relative to this file)
+    code_switching: evalsets/code-switching.tsv   # 60 Swedish sentences with English words, names and brands
+    numbers: evalsets/numbers.tsv                 # 40 with numbers, dates, times, units and abbreviations
   seeds: [1, 2]
   judge_language: Swedish             # the recogniser is told the language: identification fails on synthesized speech
   gates:                               # the release passes only if every gate holds

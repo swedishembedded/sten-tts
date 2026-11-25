@@ -1,0 +1,65 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# Swedish sentences with English words, names and brands in them, hand-written for
+# evaluating Sten-TTS (never trained on). Columns: id, text. The reference is the text.
+cs01	Jag har bokat ett meeting med teamet på måndag förmiddag.
+cs02	Kan du skicka länken till vårt Google Docs-dokument igen?
+cs03	Vi kör en daily standup klockan nio varje morgon.
+cs04	Hon jobbar som product manager på ett startup i Göteborg.
+cs05	Glöm inte att pusha dina ändringar till main innan lunch.
+cs06	Det blev en merge conflict i konfigurationsfilen igen.
+cs07	Min laptop startar om varje gång jag öppnar Photoshop.
+cs08	Vi måste uppdatera vår backend innan releasen på fredag.
+cs09	Han streamar sina spel på Twitch nästan varje kväll.
+cs10	Ladda ner appen från App Store eller Google Play.
+cs11	Har du sett den nya säsongen av The Crown på Netflix?
+cs12	Jag lyssnar på en podcast om machine learning när jag springer.
+cs13	Vår CEO presenterade den nya roadmapen på all hands-mötet.
+cs14	Lösenordet måste innehålla minst en siffra och ett specialtecken.
+cs15	Klicka på Settings och välj sedan Privacy and Security.
+cs16	Vi hade en riktigt bra brainstorming om nästa kampanj.
+cs17	Det här är bara en quick fix, vi refaktorerar koden senare.
+cs18	Skicka mig ett mejl så tar vi det offline.
+cs19	Hon köpte en ny iPhone och ett par AirPods på Black Friday.
+cs20	Jag beställde en pizza via Foodora i går kväll.
+cs21	Spotify har lagt till en ny funktion för ljudböcker.
+cs22	Microsoft Teams kraschade mitt under presentationen.
+cs23	Vi deployar till produktion med hjälp av Kubernetes.
+cs24	Servern ligger i ett datacenter som drivs av Amazon Web Services.
+cs25	Han skrev ett script i Python som rensar loggfilerna automatiskt.
+cs26	Testerna i vår CI-pipeline tar nästan tjugo minuter.
+cs27	Du kan logga in med ditt Microsoft-konto eller med Bank-ID.
+cs28	Vi har en deadline på torsdag, så det blir lite crunch i veckan.
+cs29	Min favoritlåt just nu är Shape of You med Ed Sheeran.
+cs30	Hon har vunnit flera priser för sin roman om Brexit.
+cs31	Har du testat den nya burgaren på Max eller på McDonald's?
+cs32	Jag tog en latte och en croissant på Espresso House.
+cs33	Han är fan av Manchester United och följer varje match.
+cs34	Konserten med Taylor Swift sålde slut på några minuter.
+cs35	Vi tittade på Champions League-finalen på en sportbar.
+cs36	Jag uppgraderade till Windows elva förra veckan.
+cs37	Det finns en bug i inloggningsflödet som vi måste fixa.
+cs38	Hon gick en kurs i project management på distans.
+cs39	Företaget har bytt namn från Facebook till Meta.
+cs40	Vi använder Slack för chatten och Jira för ärendena.
+cs41	Hans nya bok kommer ut som e-bok och som audiobook.
+cs42	Kan du dela din skärm så att alla ser dashboarden?
+cs43	Jag ska bara checka min feed på Instagram först.
+cs44	Det var ett riktigt bra case study om hållbar design.
+cs45	Hon arbetar med user experience och gör prototyper i Figma.
+cs46	Vi har en workshop om cybersäkerhet med en extern konsult.
+cs47	Den nya Volvon har Google Assistant inbyggd i bilen.
+cs48	Ikea lanserade en smart högtalare tillsammans med Sonos.
+cs49	Han lyssnade på Bruce Springsteen hela vägen till Stockholm.
+cs50	Vi måste göra en backup av databasen innan vi migrerar.
+cs51	Jag har jobbat remote i två år och trivs med det.
+cs52	Hon är influencer och har över hundra tusen followers.
+cs53	Skärmen är för liten för att visa hela spreadsheeten.
+cs54	Låt oss ta en break och fortsätta om en kvart.
+cs55	Han sa att det var en win-win-situation för båda parter.
+cs56	Kursen i deep learning ges av en professor från Stanford.
+cs57	Vi betalade med Swish, men butiken tog även Apple Pay.
+cs58	Rapporten från World Health Organization kom ut i morse.
+cs59	Klicka på Download och spara filen på skrivbordet.
+cs60	Hennes startup fick finansiering av ett venture capital-bolag i London.

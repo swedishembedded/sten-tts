@@ -1,0 +1,47 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# Swedish sentences with numbers, dates, times, units and abbreviations, hand-written for
+# evaluating Sten-TTS (never trained on). Columns: id, text (what the model reads), spoken
+# (how it is said). A clip is scored against whichever of the two the recogniser's
+# transcript is closer to, since it may write a number as digits or as words.
+nu01	Tåget avgår kl. 14.30 från spår 3.	Tåget avgår klockan fjorton och trettio från spår tre.
+nu02	Mötet börjar den 12 mars 2025.	Mötet börjar den tolfte mars tjugohundratjugofem.
+nu03	Biljetten kostar 149 kr.	Biljetten kostar hundrafyrtionio kronor.
+nu04	Det är 25 grader varmt i dag.	Det är tjugofem grader varmt i dag.
+nu05	Vi körde 320 km på fyra timmar.	Vi körde trehundratjugo kilometer på fyra timmar.
+nu06	Hon föddes den 3 juli 1987.	Hon föddes den tredje juli nittonhundraåttiosju.
+nu07	Paketet väger 2,5 kg.	Paketet väger två komma fem kilo.
+nu08	Ring 112 om det är en nödsituation.	Ring ett ett två om det är en nödsituation.
+nu09	Butiken har öppet 9–18 på vardagar.	Butiken har öppet nio till arton på vardagar.
+nu10	Räntan höjdes till 4,25 procent.	Räntan höjdes till fyra komma tjugofem procent.
+nu11	Han sprang 10 000 meter på 31 minuter.	Han sprang tiotusen meter på trettioen minuter.
+nu12	Lägenheten är på 68 kvm och har tre rum.	Lägenheten är på sextioåtta kvadratmeter och har tre rum.
+nu13	Bilen drar 0,6 liter per mil.	Bilen drar noll komma sex liter per mil.
+nu14	Det bor ca 10,5 miljoner människor i Sverige.	Det bor cirka tio komma fem miljoner människor i Sverige.
+nu15	Kursen börjar v. 34 och slutar i december.	Kursen börjar vecka trettiofyra och slutar i december.
+nu16	Se kapitel 7, s. 112.	Se kapitel sju, sidan hundratolv.
+nu17	Bussen kommer om 5 min.	Bussen kommer om fem minuter.
+nu18	Han är 1,85 m lång.	Han är en och åttiofem lång.
+nu19	Bordet är 120 cm brett.	Bordet är hundratjugo centimeter brett.
+nu20	Vi ses den 1 maj kl. 10.	Vi ses den första maj klockan tio.
+nu21	Fakturan på 3 450 kr ska betalas senast den 30:e.	Fakturan på tretusenfyrahundrafemtio kronor ska betalas senast den trettionde.
+nu22	Mjölken kostar 17,90 kr.	Mjölken kostar sjutton kronor och nittio öre.
+nu23	Hon bor på Storgatan 14 B.	Hon bor på Storgatan fjorton b.
+nu24	Konserten börjar 19.00 och slutar 22.30.	Konserten börjar nitton och slutar tjugotvå och trettio.
+nu25	Firman grundades år 1902.	Firman grundades år nittonhundratvå.
+nu26	Det var minus 15 grader i Kiruna i morse.	Det var minus femton grader i Kiruna i morse.
+nu27	Vattnet kokar vid 100 °C.	Vattnet kokar vid hundra grader Celsius.
+nu28	Resan tar ungefär 2 h och 45 min.	Resan tar ungefär två timmar och fyrtiofem minuter.
+nu29	Han kom på 2:a plats i loppet.	Han kom på andra plats i loppet.
+nu30	Vi är 3 st som ska åka.	Vi är tre stycken som ska åka.
+nu31	Kontakta oss bl.a. via e-post.	Kontakta oss bland annat via e-post.
+nu32	T.ex. kan du ta med en filt.	Till exempel kan du ta med en filt.
+nu33	Mötet flyttas till den 21/11.	Mötet flyttas till den tjugoförsta i elfte.
+nu34	Hon sprang ett halvmaraton på 1 tim. och 52 min.	Hon sprang ett halvmaraton på en timme och femtiotvå minuter.
+nu35	Datorn har 16 GB minne och en disk på 1 TB.	Datorn har sexton gigabyte minne och en disk på en terabyte.
+nu36	Hastigheten är begränsad till 50 km/h.	Hastigheten är begränsad till femtio kilometer i timmen.
+nu37	Det har regnat 40 mm sedan i går.	Det har regnat fyrtio millimeter sedan i går.
+nu38	Planet landar på Arlanda kl. 06.15.	Planet landar på Arlanda klockan sex och femton.
+nu39	Hon fyller 40 år den 8 augusti.	Hon fyller fyrtio år den åttonde augusti.
+nu40	Priset sänktes med 20 %.	Priset sänktes med tjugo procent.
