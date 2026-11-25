@@ -44,7 +44,7 @@ def check_release(work: Workdir) -> dict:
 
 
 def run(recipe: Recipe, work: Workdir, dry_run: bool, hub_dir: Path | None = None) -> None:
-    """Upload the release; with `hub_dir`, first mirror it there (the local copy of the repository) and upload that."""
+    """Upload the release (to `publish.subfolder` when set); with `hub_dir`, first mirror it into the local copy of the repository and upload that."""
     check_release(work)
     spec = recipe["publish"]
     visibility = "private" if spec["private"] else "public"
@@ -55,12 +55,14 @@ def run(recipe: Recipe, work: Workdir, dry_run: bool, hub_dir: Path | None = Non
     api.create_repo(spec["repo"], repo_type="model", private=True, exist_ok=True)
     if spec["private"] and not api.model_info(spec["repo"]).private:
         raise RuntimeError(f"{spec['repo']} exists and is PUBLIC but publish.private is true; refusing to upload")
+    # A compact variant lives in its own subfolder of the same repository, beside the full model.
+    sub = spec.get("subfolder")
     folder = work.release
     if hub_dir is not None:
-        hub_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(work.release, hub_dir, dirs_exist_ok=True)
-        folder = hub_dir
-    api.upload_folder(repo_id=spec["repo"], repo_type="model", folder_path=str(folder), commit_message=f"{recipe.name}: trained release", ignore_patterns=[".git/*", ".cache/*"])
+        folder = hub_dir / sub if sub else hub_dir
+        folder.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(work.release, folder, dirs_exist_ok=True)
+    api.upload_folder(repo_id=spec["repo"], repo_type="model", folder_path=str(folder), path_in_repo=sub or None, commit_message=f"{recipe.name}: trained release", ignore_patterns=[".git/*", ".cache/*"])
     if spec["private"] and not api.model_info(spec["repo"]).private:
         raise RuntimeError(f"{spec['repo']} turned public during upload")
     if not spec["private"]:
