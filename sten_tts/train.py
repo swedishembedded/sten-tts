@@ -114,8 +114,10 @@ def collect(artifacts: Path, checkpoint_digest: str, release: Path) -> list[dict
 
 
 def run(recipe: Recipe, work: Workdir, pool: BrainPool, artifacts: Path, allow_cpu: bool = False) -> dict:
+    # Training runs on one server: the first, the one started with `--training`.
+    pool = BrainPool(pool.transport, pool.buses[:1], pool.factory)
     pool.require_model("brain/train", "speech_sft")
-    brain = pool.get()
+    brain = pool.first()
     params = request(recipe, work)
     if allow_cpu:
         params["allow_cpu"] = True
