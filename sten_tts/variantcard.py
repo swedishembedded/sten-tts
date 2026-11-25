@@ -48,17 +48,20 @@ def describe(change: dict, method: str, vocabulary: dict) -> str:
     kind, config = change["edit"], change.get("config", {})
     (key, (before, after)), *_ = config.items() if config else [("", (0, 0))]
     part = _part(change.get("targets", [""])[0])
-    how = method.replace("ablation_", "").replace("_", " ")
+    greedy = method.startswith("greedy_")
+    how = {"fisher": "Fisher", "taylor": "group Taylor", "act_rms": "activation RMS", "wanda": "Wanda", "kl": "KL divergence",
+           "loss": "loss", "cosine": "stream cosine"}.get(method.replace("greedy_", "").replace("ablation_", ""), method)
     if kind == "trim_vocabulary":
         return (f"Trim the text vocabulary to {vocabulary['kept']:,} of {vocabulary['of']:,} tokens: every token of the "
-                "training texts and the tokens they are merged from")
+                "training texts and of the other candidate utterances of its sources, and the tokens they are merged from")
     if kind == "select_channels":
         unit = "attention heads" if "head" in key else "channels"
         return f"Keep {after:,} of {before:,} {unit} in every {part} {'MLP' if unit == 'channels' else 'attention'}, ranked by {how} score"
     if kind == "remove_layers":
         stack = next(iter(change["kept"]))
         removed = sorted(set(range(before)) - set(change["kept"][stack]))
-        return f"Remove {before - after} of {before} {part} layers ({_layers(removed)}), the ones the model misses least by {how}"
+        chosen = "chosen one at a time, each measured with the earlier ones removed" if greedy else "the ones it misses least alone"
+        return f"Remove {before - after} of {before} {part} layers ({_layers(removed)}), {chosen}, by {how}"
     if kind == "rotate_stream":
         return f"Rotate the {part} residual stream into its principal directions and keep {after:,} of {before:,}"
     if kind == "fold_embedding":

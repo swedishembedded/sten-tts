@@ -137,7 +137,7 @@ def test_a_variant_card_states_its_size_cut_parity_speed_and_how_to_load_it(tmp_
     assert "# Sten-TTS-950M" in card and "953.6 M parameters" in card and "1,916.7 M" in card
     assert "170.6 M" in card and "shared" in card and "counted separately" in card, "the codec"
     assert 'allow_patterns="sten-tts-950m/*"' in card and 'f"{path}/sten-tts-950m"' in card, "loading from the subfolder"
-    for frag in ("Trim the text vocabulary to 31,789 of 151,676 tokens", "Keep 3,072 of 6,144 channels in every Talker MLP", "Remove 6 of 28 Talker layers (6, 7, 8, 9, 12 and 13)"):
+    for frag in ("Trim the text vocabulary to 31,789 of 151,676 tokens", "Keep 3,072 of 6,144 channels in every Talker MLP", "Remove 6 of 28 Talker layers (6, 7, 8, 9, 12 and 13), the ones it misses least alone, by KL divergence", "by Fisher score"):
         assert frag in card, frag
     assert "| astrid |" in card and "0.004" in card, "the per-voice parity table"
     assert "0.21" in card and "59.5" in card and "0.30" in card and "NVIDIA GH200" in card, "measured speed of both"
