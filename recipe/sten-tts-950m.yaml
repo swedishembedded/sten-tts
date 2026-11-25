@@ -24,7 +24,7 @@ compress:                                # stage `compress`: brain `speech_surge
   max_parameters: 958000000              # in model.safetensors; the codec is shared and counted apart
   records: 128                           # training-shard records that calibrate the edits
   held_out_records: 128                  # validation-shard records each edit is measured on
-  install_as: sten-tts-950m-cut          # the unrecovered checkpoint, the starting point of the recovery
+  install_as: sten-tts-950m-pruned       # the unrecovered checkpoint, the starting point of the recovery
   corpus: inventory                      # the trim also keeps the tokens of every candidate utterance of every source
   plan:                                  # applied in brain's order: vocabulary, channels, layers
     - trim_vocabulary: {vocabulary: text}                                          # the tokens the texts use
