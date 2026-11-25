@@ -18,7 +18,7 @@ from .config import Recipe, Workdir
 def _evaluation(work: Workdir) -> str:
     path = work.evaluation / "report.json"
     if not path.exists():
-        return "Not evaluated yet.\n"
+        return "Pending: the gated evaluation of this checkpoint has not finished; this card is updated with its results.\n"
     r = json.loads(path.read_text())
     lines = ["| gate | value | threshold | pass |", "|---|---|---|---|"]
     for name, g in r["gates"].items():
@@ -87,11 +87,16 @@ Recordings are 16 kHz, so the 24 kHz output is band-limited.
 
 ## Training
 
-- Data: {sel['hours']['train'].get('nst', 0):.1f} h NST (CC0), {sel['hours']['train'].get('rixvox', 0):.1f} h RixVox-v2 (ODC-BY) selected, cut to {shard['hours']} h after cleaning; {sel['speakers']['train']} speakers.
+- Data: {shard['hours']} h of Swedish speech, {shard['records']} utterances, {sel['speakers']['train']} speakers: NST
+  (CC0, read sentences, ten Swedish regions) and RixVox-v2 (ODC-BY, parliament debates); {sel['hours']['train'].get('nst', 0):.1f} h
+  and {sel['hours']['train'].get('rixvox', 0):.1f} h were selected, then cleaned and cut to {shard['hours']} h. RixVox speakers
+  are never named voices.
 - Objective: full fine-tune of the Talker and the code predictor (teacher-forced codebook-0 and residual
-  cross-entropy, residual weight {recipe['train']['mtp_weight']}), the text embedding and projection frozen;
-  new codec rows for `swedish` and every voice.
-- Steps: {train_report['request']['steps']}, learning rate {recipe['train']['lr']}, seed {recipe.seed}.
+  cross-entropy, residual weight {recipe['train']['mtp_weight']}), both text layouts the model is served with; the text
+  embedding and projection frozen; new codec rows for `swedish` and every voice.
+- Schedule: {recipe['train']['epochs']} epochs, {train_report['request']['steps']} steps of {recipe['train']['batch_utterances']} x {recipe['train']['grad_accum']} utterances,
+  learning rate {recipe['train']['lr']} (cosine, {recipe['train']['warmup_fraction']:.0%} warm-up), seed {recipe.seed}.
+- Run: one NVIDIA GH200, {train_report['seconds'] / 3600:.1f} h wall clock; loss {train_report['result'].get('initial_loss', float('nan')):.2f} -> {train_report['result'].get('final_loss', float('nan')):.2f}.
 - Recipe: the `sten-tts` repository, recipe `{recipe.name}`, every source pinned to a revision.
 
 ## Evaluation
@@ -100,6 +105,15 @@ Every voice reads {recipe['evaluate']['fleurs_sentences']} FLEURS sv_se test sen
 recogniser is {recipe['judge']['repo']}.
 
 {_evaluation(work)}
+## Limitations
+
+- Trained on 16 kHz recordings, so the output lacks the top of the 24 kHz band.
+- The voices are read-speech speakers recorded around 1999; expressive, conversational or emotional styles
+  were not trained, and no style instruction is supported.
+- Swedish text is read as written: numbers, abbreviations and symbols follow whatever the training text held
+  (no separate text normalisation).
+- Finland Swedish is not covered.
+
 ## Licence and attribution
 
 Apache-2.0, as the base model. NST is CC0-1.0. {rix['attribution']}
