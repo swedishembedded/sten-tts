@@ -14,6 +14,7 @@ dependencies = [
     "soxr>=0.3",
     "pyyaml>=6",
     "huggingface_hub>=0.34",
+    "blake3>=0.4",
 ]
 
 [project.optional-dependencies]
