@@ -72,9 +72,20 @@ wavs, sr = model.generate_custom_voice(text="Hej och välkommen!", speaker="astr
 sf.write("astrid.wav", wavs[0], sr)
 ```
 
-With brain: `brain pull {recipe['publish']['repo']}`, then
-`POST /v1/audio/speech` with `"model": "{recipe['publish']['repo']}"`, `"voice": "astrid"`,
-`"language": "swedish"`.
+With brain, through its OpenAI-compatible HTTP API:
+
+```bash
+brain pull {recipe['publish']['repo']}          # the repository is private for now: `hf auth login` with access first
+brain serve --openai 127.0.0.1:8080             # prints the API key it generates (or pass --api-key-file)
+curl http://127.0.0.1:8080/v1/audio/speech \\
+  -H "Authorization: Bearer $BRAIN_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{{"model": "{recipe['publish']['repo']}", "voice": "astrid", "language": "swedish",
+       "input": "Hej och välkommen till Sten!", "response_format": "wav"}}' \\
+  -o astrid.wav
+```
+
+`voice` is any of the twelve below. Always send `"language": "swedish"`: without it brain speaks the text as English.
 
 ## Voices
 
