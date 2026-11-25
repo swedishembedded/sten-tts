@@ -40,3 +40,23 @@ def test_the_card_names_every_source_and_reports_sets_per_voice_and_region(tmp_p
     assert all(f"| {r} |" in card for r in regions), "per-region results"
     assert "1.25" in card, "the voices' liveliness scores"
     assert "LibriTTS-R (Koizumi et al., 2023)" in card, "every source's attribution"
+    head = card.split("## Use")[0]
+    assert "<!-- swedishembedded-offer:start -->" in head and "linkedin.com/in/martinschroder" in head, "the offer sits above the usage"
+    assert "error rate is 0.050, against 0.200 for the base model; 1 of 1 release gates pass" in head, "the offer's proof is this run's evaluation"
+    assert "Run: one NVIDIA GH200, 1.0 h wall clock" in card
+
+
+def test_a_fleet_run_names_its_cards_and_the_released_checkpoint(tmp_path: Path) -> None:
+    rec = config.load(RECIPE)
+    work = config.Workdir(tmp_path)
+    for d in (work.selection, work.shards):
+        d.mkdir(parents=True)
+    (work.selection / "report.json").write_text(json.dumps({"hours": {"train": {"nst": 1.0}}, "speakers": {"train": 10}}))
+    (work.selection / "voices.json").write_text(json.dumps({v["name"]: {"gender": v["gender"], "region": v["region"]} for v in rec["voices"]}))
+    (work.shards / "train.json").write_text(json.dumps({"hours": 420.0, "records": 194769, "voices": {}}))
+    result = {"initial_loss": 3.7, "final_loss": 2.2, "checkpoint": "best", "best": {"step": 1100, "held_out_loss": 2.3595},
+              "steps_completed": 1500, "stopped_early": True}
+    card = modelcard.model_card(rec, work, {"request": {"steps": 3324}, "ranks": 11, "seconds": 1770, "result": result})
+    assert "Run: 11 NVIDIA GH200 cards, 30 min wall clock" in card
+    assert "step-1100 checkpoint, the lowest held-out loss (2.3595) of 1500 steps, stopped early" in card
+    assert "194,769 utterances in 30 minutes on 11 GPUs" in card and "evaluation is still pending" in card

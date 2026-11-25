@@ -3,6 +3,23 @@
 
 # Sten-TTS-1.7B
 
+> **A Swedish or Nordic voice for your product, trained on your data and run on your infrastructure**
+>
+> For product teams, public-sector services and device makers that need speech in Swedish, another Nordic
+> language or a regional dialect, and cannot send their users' text to a cloud service.
+>
+> Swedish Embedded AB will:
+> - build your brand voice, language or dialect with a recipe like this one, from data selection to release;
+> - adapt pronunciation to your domain: product names, numbers, terminology, measured on your own sentences;
+> - deploy the model privately, behind an OpenAI-compatible speech API or on an edge device.
+>
+> This repository is the whole recipe: pinned open sources, licence-checked selection, training across a
+> GPU fabric and a gated evaluation, every stage reproducible from one command.
+>
+> Tell Martin Schröder about your use case on [LinkedIn](https://www.linkedin.com/in/martinschroder/), or email info@swedishembedded.com.
+
+Built by Martin Schröder <info@swedishembedded.com> ([LinkedIn](https://www.linkedin.com/in/martinschroder/)), Swedish Embedded AB.
+
 The complete recipe that produces **Sten-TTS-1.7B**, a Swedish multi-speaker
 text-to-speech model with twelve named voices, by fine-tuning
 [Qwen/Qwen3-TTS-12Hz-1.7B-Base](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base)

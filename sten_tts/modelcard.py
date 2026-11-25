@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 
 from .config import Recipe, Workdir
+from .offer import model_offer
 
 
 SOURCE_NAMES = {"nst": "NST Swedish (read sentences, ten Swedish regions)", "rixvox": "RixVox-v2 (parliament debates)",
@@ -50,6 +51,44 @@ def _evaluation(recipe: Recipe, work: Workdir) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _run_line(train_report: dict) -> str:
+    """Where and how long it trained, and which checkpoint the release is."""
+    ranks, result = train_report.get("ranks", 1), train_report["result"]
+    hours = train_report["seconds"] / 3600
+    clock = f"{hours:.1f} h" if hours >= 1 else f"{train_report['seconds'] / 60:.0f} min"
+    where = "one NVIDIA GH200" if ranks == 1 else f"{ranks} NVIDIA GH200 cards"
+    line = (f"{where}, {clock} wall clock; loss {result.get('initial_loss', float('nan')):.2f} -> "
+            f"{result.get('final_loss', float('nan')):.2f}")
+    best = result.get("best")
+    if best and result.get("checkpoint") == "best":
+        stop = ", stopped early" if result.get("stopped_early") else ""
+        line += (f"; the release is the step-{best['step']} checkpoint, the lowest held-out loss "
+                 f"({best['held_out_loss']:.4f}) of {result['steps_completed']} steps{stop}")
+    return line + "."
+
+
+def _proof(work: Workdir, shard: dict, voices: dict, train_report: dict) -> str:
+    """The offer's proof: this release's own numbers, the evaluation's once it has run."""
+    regions = len({v["region"] for v in voices.values()})
+    ranks = train_report.get("ranks", 1)
+    on = "one GPU" if ranks == 1 else f"{ranks} GPUs"
+    minutes = train_report["seconds"] / 60
+    took = f"{minutes / 60:.1f} hours" if minutes >= 90 else f"{minutes:.0f} minutes"
+    text = (f"a 1.7B model with {len(voices)} named Swedish voices from {regions} regions, fine-tuned on "
+            f"{shard['hours']} hours and {shard['records']:,} utterances in {took} on {on}, in the upstream checkpoint layout.")
+    path = work.evaluation / "report.json"
+    if path.exists():
+        r = json.loads(path.read_text())
+        fleurs = r.get("sets", {}).get("fleurs")
+        if fleurs and fleurs.get("base_cer") is not None:
+            passed = sum(g["pass"] for g in r["gates"].values())
+            text += (f" On held-out FLEURS sentences its character error rate is {fleurs['cer']:.3f}, against "
+                     f"{fleurs['base_cer']:.3f} for the base model; {passed} of {len(r['gates'])} release gates pass.")
+    else:
+        text += " Its gated evaluation is still pending."
+    return text
+
+
 def model_card(recipe: Recipe, work: Workdir, train_report: dict) -> str:
     sel = json.loads((work.selection / "report.json").read_text())
     shard = json.loads((work.shards / "train.json").read_text())
@@ -82,6 +121,8 @@ tags:
 ---
 
 # Sten-TTS-1.7B
+
+{model_offer(_proof(work, shard, voices, train_report))}
 
 A Swedish text-to-speech model with twelve named voices, fine-tuned from
 [{recipe['base']['repo']}](https://huggingface.co/{recipe['base']['repo']}) (revision
@@ -143,7 +184,7 @@ recordings are 16 kHz, so the 24 kHz output is band-limited.
   embedding and projection frozen; new codec rows for `swedish` and every voice; English uses the base's own row.
 - Schedule: {recipe['train']['epochs']} epochs, {train_report['request']['steps']} steps of {recipe['train']['batch_utterances']} x {recipe['train']['grad_accum']} utterances,
   learning rate {recipe['train']['lr']} (cosine, {recipe['train']['warmup_fraction']:.0%} warm-up), seed {recipe.seed}.
-- Run: one NVIDIA GH200, {train_report['seconds'] / 3600:.1f} h wall clock; loss {train_report['result'].get('initial_loss', float('nan')):.2f} -> {train_report['result'].get('final_loss', float('nan')):.2f}.
+- Run: {_run_line(train_report)}
 - Recipe: the `sten-tts` repository, recipe `{recipe.name}`, every source pinned to a revision.
 
 ## Evaluation

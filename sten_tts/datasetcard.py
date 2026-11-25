@@ -16,6 +16,7 @@ card is the export's.
 from __future__ import annotations
 
 from .config import Recipe
+from .offer import dataset_offer
 
 # What each source is, for the card; licence, revision and attribution come from the recipe.
 ABOUT = {
@@ -104,6 +105,9 @@ def card(recipe: Recipe, manifest: dict, voices: dict, segment_report: dict | No
     rix = recipe["sources"]["rixvox"].get("attribution", "")
     seg_cfg = recipe["segment"]
     held = sel["held_out"]
+    proof = (f"{manifest['splits']['train']['hours']:.0f} hours and {manifest['splits']['train']['rows']:,} utterances from "
+             f"{len(sources)} open sources, {len(voices)} named voices, held-out speakers and texts for evaluation, and the "
+             f"source, licence and pinned revision named on every row.")
     return f"""---
 license: other
 license_name: sten-tts-voice-terms
@@ -128,6 +132,8 @@ configs:
 ---
 
 # {spec['name']}
+
+{dataset_offer(proof)}
 
 The training collection of Sten-TTS-1.7B v2, a Swedish text-to-speech model with twelve named voices:
 {manifest['splits']['train']['hours']:.0f} hours of Swedish and English speech from five open sources, cleaned,
