@@ -30,7 +30,7 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--workdir", required=True, type=Path, help="where this run's data, shards, checkpoints and reports live")
     p.add_argument("--recipe", type=Path, default=DEFAULT_RECIPE)
     p.add_argument("--jobs", type=int, default=min(32, os.cpu_count() or 1), help="worker processes for host-side stages")
-    p.add_argument("--only", nargs="*", help="fetch: only these sources")
+    p.add_argument("--only", nargs="*", help="fetch, inventory: only these sources")
     p.add_argument("--brain-transport", choices=["dbus", "jsonl"], default="dbus", help="how brain-py reaches the brain server")
     p.add_argument("--brain-bus", action="append", metavar="BUS",
                    help="a D-Bus bus a brain server is on: session (the default), system or an address (unix:path=...); "
@@ -54,7 +54,7 @@ def main(argv: list[str] | None = None) -> None:
         print(json.dumps(segment.run(recipe, work, brainclient.connect(a.brain_transport, a.brain_bus or ["session"]), a.concurrency, a.jobs), indent=1))
     elif a.stage == "inventory":
         from . import inventory
-        inventory.build(recipe, work, a.jobs)
+        inventory.build(recipe, work, a.jobs, a.only)
     elif a.stage == "select":
         from . import evalset, select
         evalset.write(recipe, work)

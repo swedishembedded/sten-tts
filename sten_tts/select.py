@@ -65,6 +65,7 @@ class Utt:
     text: str
     duration: float
     quality: str | None
+    language: str = "swedish"
 
 
 def _eligible(u: Utt, sel: dict) -> str | None:

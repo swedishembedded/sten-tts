@@ -31,6 +31,7 @@ import pyarrow.parquet as pq
 import soundfile as sf
 
 from .config import Recipe, Workdir
+from .inventory import audio_path, fleurs_members
 
 FRAME_SECONDS = 0.02
 
@@ -79,6 +80,13 @@ def _load_rows(path: Path, fmt: str, rows: list[int]) -> list[bytes]:
         with path.open("rb") as fh:
             audio = ipc.open_stream(fh).read_all().column("audio")
         return [audio[i]["bytes"].as_py() for i in rows]
+    if fmt == "fleurs":
+        wanted = set(rows)
+        found = {k: data for k, _, data in fleurs_members(path) if k in wanted}
+        return [found[i] for i in rows]
+    if fmt == "librivox-chunks":
+        t = pq.read_table(path, columns=["wav"]).column("wav")
+        return [t[i].as_py() for i in rows]
     t = pq.read_table(path, columns=["audio"]).column("audio")
     return [t[i]["bytes"].as_py() for i in rows]
 
@@ -104,7 +112,7 @@ def process(recipe: Recipe, work: Workdir, jobs: int, rows_per_file: int = 4000)
     tasks = []
     for (src, f), items in sorted(by_file.items()):
         fmt = recipe["sources"][src]["format"]
-        tasks.append((str(work.raw(src) / f), fmt, sorted(items, key=lambda i: i["row"]), recipe["audio"]))
+        tasks.append((str(audio_path(work, src, fmt, f)), fmt, sorted(items, key=lambda i: i["row"]), recipe["audio"]))
     work.audio.mkdir(parents=True, exist_ok=True)
     for old in work.audio.glob("*.parquet"):
         old.unlink()

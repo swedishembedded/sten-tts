@@ -251,7 +251,7 @@ Each stage is also `python -m sten_tts.cli <stage> --workdir DIR` (see
 |---|---|---|
 | `fetch` | the recipe's `sources` | `raw/<source>/...`, `raw/<source>/fetched.json` (files, sizes, blob ids) |
 | `segment` | `raw/librivox/`, the brain server (recogniser) | `segments/segments.parquet` (every cut: times, book text, recognition, CER, rejection), `segments/audio-NNNN.parquet`, `segments/report.json` |
-| `inventory` | `raw/` | `inventory/<source>.parquet`: every utterance, its speaker, metadata, transcript, duration |
+| `inventory` | `raw/`, `segments/` | `inventory/<source>.parquet`: every utterance, its speaker, metadata, language (`swedish`/`english`), transcript, duration |
 | `select` | `inventory/`, FLEURS transcripts | `selection/selection.parquet` (utterance -> split, voice), `selection/voices.json`, `selection/report.json`, `evaluation/sentences.json` |
 | `audio` | `selection/`, `raw/` | `audio/<split>-NNNN.parquet` (trimmed 16-bit WAV + measures), `audio/rejected.parquet`, `audio/report.json` |
 | `shards` | `audio/`, the brain server | `shards/{train,validation}.bttshrd` (brain's `brain-tts-shard-v1`), `shards/report.json` |
