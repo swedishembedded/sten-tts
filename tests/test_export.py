@@ -71,7 +71,7 @@ def test_the_export_is_loadable_audio_with_each_rows_licence(work) -> None:
         assert r["source_license"] == src["license"] and r["source_revision"] == f"{src['repo']}@{src['revision']}"
     card = (w.root / "export" / "README.md").read_text()
     assert "license_link: https://huggingface.co/datasets/" in card and "/blob/main/TERMS.md" in card and "- split: voice_test" in card and "impersonat" in card
-    assert "Contains information from the dataset RixVox-v2" in card and "Koizumi2023-hs" in card and "fleurs2022arxiv" in card
+    assert "Contains information from the dataset RixVox-v2" in card and "arXiv:2305.18802" in card and "arXiv:2205.12446" in card
     assert "CC-BY-4.0" in (w.root / "export" / "TERMS.md").read_text()
 
 

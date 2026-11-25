@@ -28,24 +28,10 @@ ABOUT = {
 }
 HF_LICENSE = {"CC0-1.0": "cc0-1.0", "CC-BY-4.0": "cc-by-4.0", "ODC-BY-1.0": "odc-by"}
 
-LIBRITTS_R_CITATION = '''@ARTICLE{Koizumi2023-hs,
-  title         = "{LibriTTS-R}: A restored multi-speaker text-to-speech corpus",
-  author        = "Koizumi, Yuma and Zen, Heiga and Karita, Shigeki and Ding,
-                   Yifan and Yatabe, Kohei and Morioka, Nobuyuki and Bacchiani,
-                   Michiel and Zhang, Yu and Han, Wei and Bapna, Ankur",
-  month         =  may,
-  year          =  2023,
-  archivePrefix = "arXiv",
-  primaryClass  = "eess.AS",
-  eprint        = "2305.18802"
-}'''
-FLEURS_CITATION = '''@article{fleurs2022arxiv,
-  title = {FLEURS: Few-shot Learning Evaluation of Universal Representations of Speech},
-  author = {Conneau, Alexis and Ma, Min and Khanuja, Simran and Zhang, Yu and Axelrod, Vera and Dalmia, Siddharth and Riesa, Jason and Rivera, Clara and Bapna, Ankur},
-  journal={arXiv preprint arXiv:2205.12446},
-  url = {https://arxiv.org/abs/2205.12446},
-  year = {2022}
-}'''
+LIBRITTS_R_REF = ("*LibriTTS-R: A Restored Multi-Speaker Text-to-Speech Corpus* (2023), "
+                  "[arXiv:2305.18802](https://arxiv.org/abs/2305.18802)")
+FLEURS_REF = ("*FLEURS: Few-shot Learning Evaluation of Universal Representations of Speech* (2022), "
+              "[arXiv:2205.12446](https://arxiv.org/abs/2205.12446)")
 
 
 def terms(recipe: Recipe) -> str:
@@ -263,17 +249,9 @@ RixVox-v2 (ODC-BY-1.0):
 
 > {rix}
 
-LibriTTS-R (CC-BY-4.0), derived from LibriTTS and LibriSpeech:
+LibriTTS-R (CC-BY-4.0), derived from LibriTTS and LibriSpeech: {LIBRITTS_R_REF}.
 
-```bibtex
-{LIBRITTS_R_CITATION}
-```
-
-FLEURS (CC-BY-4.0):
-
-```bibtex
-{FLEURS_CITATION}
-```
+FLEURS (CC-BY-4.0): {FLEURS_REF}.
 
 NST Swedish ASR Database (CC0-1.0), created by Nordic Language Technology (reorganised by KTH as
 [KTH/nst](https://huggingface.co/datasets/KTH/nst)). LibriVox Swedish recordings (CC0-1.0, public domain), via
