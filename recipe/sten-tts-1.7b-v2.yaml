@@ -56,7 +56,7 @@ sources:
     revision: 0d1718db351207d5a493135a62d5ed8cc4733830
     license: CC-BY-4.0
     attribution: >-
-      LibriTTS-R (Koizumi et al., 2023), derived from LibriTTS and LibriSpeech, CC-BY-4.0.
+      LibriTTS-R (2023, arXiv:2305.18802), derived from LibriTTS and LibriSpeech, CC-BY-4.0.
     files: "data/train.clean.100/*"   # English replay at 24 kHz, so English words in Swedish text stay English
     format: libritts-r
 
@@ -166,4 +166,3 @@ publish:
   samples:                                # the clips the model card plays: evaluation clips, unpicked (stage `samples`)
     seed: 1                               # the evaluation seed whose take is used
     order: [axel, astrid, erik, linnea, viktor, elsa, oskar, maja, nils, signe, arvid, ingrid]
-    sentence: {signe: 1, arvid: 1}        # index into the FLEURS evaluation sentences; every other voice reads sentence 0

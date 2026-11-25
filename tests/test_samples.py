@@ -18,6 +18,7 @@ RECIPE = Path(__file__).resolve().parents[1] / "recipe" / "sten-tts-1.7b-v2.yaml
 
 def test_samples_come_from_the_evaluation_seed_in_order_and_play_on_the_card(tmp_path: Path) -> None:
     rec = config.load(RECIPE)
+    rec.raw["publish"]["samples"]["sentence"] = {"signe": 1, "arvid": 1}  # the per-voice override, exercised here
     work = config.Workdir(tmp_path)
     for d in (work.selection, work.shards, work.evaluation):
         d.mkdir(parents=True)
@@ -37,7 +38,8 @@ def test_samples_come_from_the_evaluation_seed_in_order_and_play_on_the_card(tmp
     (work.selection / "voices.json").write_text(json.dumps({v["name"]: {"gender": v["gender"], "region": v["region"]} for v in rec["voices"]}))
     (work.shards / "train.json").write_text(json.dumps({"hours": 420.0, "records": 194769, "voices": {}}))
     card = modelcard.model_card(rec, work, {"request": {"steps": 1}, "seconds": 60, "result": {}})
-    head = card.split("## Use")[0]
+    head = card.split("## Usage")[0]
     assert f'src="https://huggingface.co/{rec["publish"]["repo"]}/resolve/main/samples/axel.wav"' in head
     assert head.index("**Axel**") < head.index("**Astrid**")
-    assert f"https://huggingface.co/datasets/{rec['dataset']['repo']}" in head and "420.0 hours" in head
+    assert "Signe and Arvid read a different held-out sentence" in head and head.count("> Mening") == 2, "each sentence shown once"
+    assert f"https://huggingface.co/datasets/{rec['dataset']['repo']}" in head and "420 hours" in head
