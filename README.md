@@ -6,7 +6,8 @@
 The complete recipe that produces **Sten-TTS-1.7B**, a Swedish multi-speaker
 text-to-speech model with twelve named voices, by fine-tuning
 [Qwen/Qwen3-TTS-12Hz-1.7B-Base](https://huggingface.co/Qwen/Qwen3-TTS-12Hz-1.7B-Base)
-on 100 hours of open Swedish speech. Training runs entirely inside
+on 420 hours of open speech (Swedish, with 10 % English so that English words
+inside Swedish sentences keep their pronunciation). Training runs entirely inside
 [brain](https://github.com/swedishembedded/brain); this repository only selects
 and prepares data, drives brain over its API (through `brain-py`), checks the
 result and publishes it.
@@ -14,6 +15,12 @@ result and publishes it.
 The release is an ordinary Qwen3-TTS `custom_voice` checkpoint in the upstream
 layout. It loads unchanged in brain and in the upstream `qwen-tts` package
 (transformers 4.57.3) and adds `swedish` as a language.
+
+This is the v2 recipe (`recipe/sten-tts-1.7b-v2.yaml`, the default). It fixes
+v1's problems: v1 trained on 100 h of Swedish only (English words came out
+badly), its voices were the NST speakers with the most audio (20-35 minutes of
+flat read speech each), and all of it was 16 kHz. `recipe/sten-tts-1.7b.yaml`
+reproduces v1.
 
 Swedish Embedded AB implements solutions for training speech models on your own
 data, in your own languages and voices, for its clients. If your team needs
@@ -25,12 +32,13 @@ services by sending an email to info@swedishembedded.com.
 | | |
 |---|---|
 | Base | Qwen3-TTS-12Hz-1.7B-Base (Apache-2.0), pinned revision in the recipe |
-| Training audio | 100 h after filtering: NST Swedish (CC0, read speech, 10 regions) and RixVox-v2 (ODC-BY, parliament) |
-| Speakers | about 790 in training; 12 of them become named voices |
+| Training audio | 420 h after filtering and the cut: NST Swedish (CC0, read speech, 10 regions), RixVox-v2 (ODC-BY, parliament debates), LibriVox Swedish audiobooks (CC0, segmented and aligned here), FLEURS sv_se train+dev (CC-BY-4.0) and LibriTTS-R English (CC-BY-4.0, 24 kHz) |
+| Speakers | about 4300 in training (2674 of them single FLEURS recordings); 12 NST speakers become named voices |
 | Voices | astrid, erik (Mellansverige), linnea, viktor (Stockholm), elsa, oskar (Göteborg), maja, nils (Västra sydsverige), signe, arvid (Norrland), ingrid, axel (Dalarna) |
-| Language | `swedish`, a new codec language row learnt in training |
+| Languages | `swedish`, a new codec language row learnt in training; `english`, the base's own row, trained on alongside |
 | Output | 24 kHz, 12.5 Hz codec frames |
-| Held out | 18 whole unseen speakers, 20 unseen sentences per voice, 200 FLEURS sv_se sentences (never trained on) |
+| Held out | 23 whole unseen speakers (NST, RixVox, LibriVox, LibriTTS-R), 20 unseen sentences per voice, 200 FLEURS sv_se test sentences, 60 Swedish sentences with English words and 40 with numbers (never trained on) |
+| Dataset | the training collection is published as the dataset `swedishembedded/sten-tts-voice` (stages `export`, `publish-dataset`) |
 
 ## Requirements
 
@@ -42,9 +50,9 @@ services by sending an email to info@swedishembedded.com.
   `brain pull Qwen/Qwen3-TTS-12Hz-1.7B-Base` and, for the evaluation,
   `brain pull Qwen/Qwen3-ASR-1.7B`.
 - **brain-py**, brain's Python client: `pip install -e <brain>/brain-py`.
-- **Python 3.11+**, and about 200 GB of free disk for the work directory
-  (120 GB of sources, the rest shards, checkpoints and reports). A fast local
-  disk is best.
+- **Python 3.11+**, and about 500 GB of free disk for the work directory
+  (about 350 GB of sources, the rest segments, cleaned audio, shards,
+  checkpoints, reports and the dataset export). A fast local disk is best.
 - **A Hugging Face token** (`hf auth login`) to download the sources and, for
   `publish` only, write access to the target organisation.
 - For the upstream compatibility check in `evaluate`: a second environment
@@ -331,15 +339,48 @@ refuses unless every gate passed.
 
 | stage | state |
 |---|---|
-| `fetch`, `inventory`, `select`, `audio` | done; run on the real sources (105 h kept for training before the 100 h cut) |
-| `shards`, `train`, `evaluate` | being written against brain's `encode` and `speech_sft` actions, which are landing in brain now |
+| `fetch`, `segment`, `inventory`, `voices`, `select`, `audio`, `shards` | done for v2 on the real sources: 478 h selected, 454 h kept after the audio filters, the shards cut at 420 h (194 769 records, 375.8 h Swedish, 44.2 h English) |
+| `train`, `evaluate` | the v2 run trains on those shards |
+| `export`, `publish-dataset` | the training collection as the public dataset `swedishembedded/sten-tts-voice` |
 | `publish` | done (guarded; refuses until `evaluate` passes) |
+
+### The v2 corpus
+
+| source | train h (selected) | speakers | notes |
+|---|---|---|---|
+| NST | 231.8 | 833 | read speech, 10 dialect regions; 20 min cap per session; voices take all their audio |
+| RixVox-v2 | 167.4 | 543 | 100 shards (2477 h, 700 speakers) before filtering; WER <= 0.10 keeps far fewer |
+| LibriVox | 22.3 | 8 books | `segment` kept 23.1 h of 40.4 h (CER rejections 15.6 h, edge words 1.6 h) |
+| FLEURS sv_se train+dev | 9.1 | 2674 recordings | readers not identified |
+| LibriTTS-R | 47.8 | 238 | English, 24 kHz |
+
+By language 430.6 h Swedish and 47.8 h English; by gender 217.7 h female,
+212.9 h male, 47.8 h unspecified (LibriTTS-R). These are selected hours with
+the 15 % oversample; the audio filters dropped 490 clips and trimming the rest
+left 454 h, cut to 420 h for the shards.
+
+The voices (`selection/voices.json`, the liveliest NST speaker per slot with at
+least 20 minutes): their liveliness scores run from 0.92 (ingrid) to 2.38
+(linnea); every slot had 15-51 candidates, and every chosen voice scores above
+the mean of its gender (score 0).
 
 ## Deviations from the original plan
 
 - **Open data only.** No authorised persona recordings exist yet, so the twelve
-  voices are anonymous NST speakers (CC0). The recordings are 16 kHz, so the
-  24 kHz output is band-limited until wideband material is added.
+  voices are anonymous NST speakers (CC0). The Swedish recordings are 16 kHz, so
+  the 24 kHz output is band-limited until wideband Swedish material is added
+  (only LibriTTS-R, English, is 24 kHz).
+- **LibriVox yields less than proposed.** The recogniser's CER against the book
+  text is above 0.10 for 39 % of the LibriVox audio (old spelling and names),
+  so `segment` keeps 23 h instead of ~35 h; the selection gives the shortfall to
+  the other sources.
+- **The LibriVox recognition pass is bound by brain's Qwen3-ASR**, which decodes
+  one request at a time per instance (about 11 audio seconds a second on a
+  GH200); spreading it over eight servers on six cards (two per card on n80, one per card
+  on n460) took it to about 75.
+- **Voices need 20 minutes, not 25.** At 25 minutes a slot has two to eight
+  candidates and two slots' best scored below their gender's mean; at 20 it has
+  15-51.
 - **No Finland Swedish.** NST has no Finland Swedish speakers; the last voice
   pair is from Dalarna.
 - **RixVox speakers are not voices.** They are identifiable public persons, so
@@ -350,9 +391,10 @@ refuses unless every gate passed.
 
 ## Licences and attribution
 
-The recipe is Apache-2.0 (`LICENSE`). The base model is Apache-2.0. NST is
-CC0-1.0. FLEURS (evaluation only) is CC-BY-4.0. The release carries this
-notice, which RixVox-v2's licence requires:
+The recipe is Apache-2.0 (`LICENSE`). The base model is Apache-2.0. NST and
+LibriVox are CC0-1.0. FLEURS and LibriTTS-R are CC-BY-4.0 (the model card and
+the dataset card carry their citations). The release carries this notice,
+which RixVox-v2's licence requires:
 
 > Contains information from the dataset RixVox-v2
 > (https://huggingface.co/datasets/KBLab/rixvox-v2), made available under the
