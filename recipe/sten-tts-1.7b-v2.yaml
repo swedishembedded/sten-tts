@@ -126,7 +126,7 @@ voices:
 
 train:
   install_as: sten-tts-1.7b            # installed in brain's model store as local/sten-tts-1.7b
-  resume_key: sten-tts-1.7b-v1
+  resume_key: sten-tts-1.7b-v2              # a new run: v1's key would refuse the changed request
   epochs: 3
   lr: 1.0e-5
   weight_decay: 0.01
