@@ -87,7 +87,7 @@ evaluate: check-workdir
 samples: check-workdir
 	$(STEN) samples $(ARGS)
 
-## publish - upload the release to its private Hugging Face repository (HUB_DIR: a local mirror)
+## publish - upload the release to its Hugging Face repository (HUB_DIR: a local mirror)
 publish: check-workdir
 	$(STEN) publish $(ARGS) $(if $(HUB_DIR),--hub-dir "$(HUB_DIR)")
 

@@ -162,7 +162,7 @@ dataset:                               # stages `export` and `publish-dataset`: 
 
 publish:
   repo: swedishembedded/sten-tts          # the local mirror of this repository is given to `publish --hub-dir`
-  private: true
+  private: false                        # public since 2026-11-25; a new repository is still created private and opened only after a complete upload
   samples:                                # the clips the model card plays: evaluation clips, unpicked (stage `samples`)
     seed: 1                               # the evaluation seed whose take is used
     order: [axel, astrid, erik, linnea, viktor, elsa, oskar, maja, nils, signe, arvid, ingrid]
