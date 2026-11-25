@@ -283,7 +283,7 @@ byte-identical selection. With the v2 recipe it:
   FLEURS 2 %, LibriTTS-R 10 %) with a per-speaker cap (20 min NST, 30 min
   RixVox, 5 h a LibriVox book, 20 min LibriTTS-R), round-robin over gender and
   region; a source that runs short leaves its shortfall to the others; then
-  oversamples by 10 % so the audio filters can drop clips and the shards are
+  oversamples by 15 % so the audio filters can drop clips and the shards are
   cut at exactly 420 h; 1 % of the training speakers' utterances validate.
 
 `selection/report.json` lists hours per split, source, language, gender and
