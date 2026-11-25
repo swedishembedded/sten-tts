@@ -44,7 +44,7 @@ import pyarrow.parquet as pq
 import soundfile as sf
 import soxr
 
-from . import metrics, samples
+from . import metrics, parity, samples
 from .brainclient import BrainPool
 from .config import Recipe, Workdir
 from .modelcard import model_card
@@ -202,9 +202,17 @@ def run(recipe: Recipe, work: Workdir, pool: BrainPool, concurrency: int, upstre
         "failure_rate_max": {"value": round(fail, 4), "threshold": g["failure_rate_max"], "pass": fail <= g["failure_rate_max"]},
         "upstream_loads": {"value": upstream["status"], "threshold": "loads and speaks", "pass": upstream["status"] == "ok"},
     }
+    if "parity" in ev:
+        # A compact variant: the full model's clips of the same sentences, voices and seeds are the reference.
+        spec = ev["parity"]
+        teacher_rows = pq.read_table(work.root / spec["teacher_clips"], columns=["system", "set", "voice", "sentence", "seed", "cer", "similarity", "nearest", "failure"]).to_pylist()
+        par = parity.compare(rows, teacher_rows, voices, spec, seed=recipe.seed)
+        gates.update({f"parity_{k}": v for k, v in par["gates"].items()})
     report = {"gates": gates, "voices": per_voice, "base": {"cer": float(np.mean([r["cer"] for r in bs]))}, "floor": {"cer": floor},
               "paired_cer": paired, "failures": {k: sum(1 for r in st if r["failure"] == k) for k in ("silent", "length_cap", "too_long")},
               "upstream": upstream, "clips": len(rows), "sets": per_set(rows, region_of)}
+    if "parity" in ev:
+        report["parity"] = par
     (work.evaluation / "report.json").write_text(json.dumps(report, indent=1, ensure_ascii=False))
     if "samples" in recipe["publish"]:
         samples.write(recipe, work)

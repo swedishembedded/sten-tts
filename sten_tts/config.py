@@ -84,7 +84,10 @@ def load(path: str | Path) -> Recipe:
         _require(live["weights"], {"f0_range", "f0_sd", "energy_sd", "syllable_rate"}, f"{path}: liveliness.weights")
     if "dataset" in raw:
         _require(raw["dataset"], {"repo", "name", "rows_per_shard"}, f"{path}: dataset")
-    _require(raw["publish"], {"repo", "private"}, f"{path}: publish", optional={"samples"})
+    _require(raw["publish"], {"repo", "private"}, f"{path}: publish", optional={"samples", "subfolder"})
+    if "parity" in raw["evaluate"]:
+        _require(raw["evaluate"]["parity"], {"teacher_clips", "cer_max_delta", "similarity_max_drop", "identity_max_drop", "failure_max_delta"},
+                 f"{path}: evaluate.parity")
     if "samples" in raw["publish"]:
         smp = raw["publish"]["samples"]
         _require(smp, {"seed", "order"}, f"{path}: publish.samples", optional={"sentence"})
