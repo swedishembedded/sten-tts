@@ -291,9 +291,9 @@ The judge is Qwen3-ASR-1.7B served by brain. The gates, all in the recipe:
 
 | gate | passes when |
 |---|---|
-| `cer_max` | mean recogniser CER over every voice and sentence is at most 0.08 |
+| `cer_over_floor_max` | mean recogniser CER is at most 0.03 above the recogniser's own CER on the voices' real held-out recordings |
 | `cer_better_than_base` | Sten's CER is below the base's on the same sentences (paired bootstrap, 95 % interval below zero) |
-| `voice_similarity_min` | each voice's speaker-encoder cosine to its own held-out recordings is at least 0.60 |
+| `voice_similarity_gap_max` | for each voice, its clips are at most 0.05 less similar (speaker encoder) to its held-out recordings than those recordings are to each other |
 | `voice_identity_accuracy_min` | at least 90 % of clips are nearest to their own voice among the twelve |
 | `failure_rate_max` | at most 2 % of clips hit the length cap, are silent or loop |
 | `upstream_loads` | the release loads in upstream `qwen-tts` and speaks Swedish with a named voice |

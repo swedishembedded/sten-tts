@@ -16,6 +16,7 @@ JOBS ?= 16
 CONCURRENCY ?= 8
 HUB_DIR ?=
 ARTIFACTS ?=
+UPSTREAM_PYTHON ?=
 STEN := $(PYTHON) -m sten_tts.cli
 ARGS = --workdir "$(WORKDIR)" --recipe "$(RECIPE)"
 
@@ -66,7 +67,7 @@ train: check-workdir
 
 ## evaluate - synthesis by every voice, recognition, similarity, gates; upstream loader check
 evaluate: check-workdir
-	$(STEN) evaluate $(ARGS) --concurrency $(CONCURRENCY)
+	$(STEN) evaluate $(ARGS) --concurrency $(CONCURRENCY) $(if $(UPSTREAM_PYTHON),--upstream-python "$(UPSTREAM_PYTHON)")
 
 ## publish - upload the release to its private Hugging Face repository (HUB_DIR: a local mirror)
 publish: check-workdir
