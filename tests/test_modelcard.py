@@ -131,8 +131,13 @@ def test_a_variant_card_states_its_size_cut_parity_speed_and_how_to_load_it(tmp_
         "variant": {"real_time_factor": 0.21, "frames_per_second": 59.5}, "teacher": {"real_time_factor": 0.30, "frames_per_second": 41.7}, "speedup": 1.43}))
     report = {"request": {"steps": 6000, "lr": 1e-4}, "ranks": 4, "seconds": 7200,
               "result": {"checkpoint": "best", "best": {"step": 2400, "held_out_loss": 0.21}, "steps_completed": 3200, "stopped_early": True}}
+    teacher = work.root / rec["evaluate"]["parity"]["teacher_evaluation"]
+    teacher.mkdir()
+    (teacher / "report.json").write_text(json.dumps({"sets": {"fleurs": {"cer": 0.064}, "code_switching": {"cer": 0.050}, "numbers": {"cer": 0.070}}}))
     card = modelcard.model_card(rec, work, report)
 
+    assert "It reads code-switching sentences less clearly than Sten-TTS-1.7B (CER 0.065 against 0.050)" in card, "a weaker set is said"
+    assert "numbers sentences less clearly" not in card
     assert card.startswith("---\n") and "base_model: swedishembedded/sten-tts" in card.split("---")[1]
     assert "# Sten-TTS-950M" in card and "953.6 M parameters" in card and "1,916.7 M" in card
     assert "170.6 M" in card and "shared" in card and "counted separately" in card, "the codec"

@@ -23,7 +23,7 @@ from collections import Counter
 
 from .compress import parameters
 from .config import Recipe, Workdir
-from .modelcard import ISO, _evaluation, _region, _run, _samples, _took
+from .modelcard import ISO, SETS, _evaluation, _names, _region, _run, _samples, _took
 from .offer import model_offer
 
 # A stack or stream of the checkpoint, as the card names it.
@@ -69,6 +69,15 @@ def describe(change: dict, method: str, vocabulary: dict) -> str:
     return f"{kind} ({method})"
 
 
+def _hidden(distill: dict) -> str:
+    """The hidden-state term of the recovery, in words, when it has one."""
+    if not distill.get("hidden_kd_weight"):
+        return ""
+    pairs = ", ".join(f"{s} to {t}" for s, t in distill["hidden_kd_layers"])
+    return (f", and a mean squared error (weight {distill['hidden_kd_weight']:g}) between residual streams of this model and "
+            f"the full model through a learned projection (its layers {pairs}; the projection is not part of the release)")
+
+
 def _cut(recipe: Recipe, compress: dict) -> str:
     out = compress["result"]
     manifest = out["manifest"]["manifest"]["edits"]  # the job reports surgery.json: {"manifest", "outcome"}
@@ -80,7 +89,7 @@ def _cut(recipe: Recipe, compress: dict) -> str:
     return "\n".join(rows)
 
 
-def _parity(recipe: Recipe, r: dict) -> str:
+def _parity(recipe: Recipe, r: dict, teacher_sets: dict | None) -> str:
     par, full = r["parity"], recipe["teacher"]["title"]
     low, high = par["cer_delta_ci95"]
     lines = [f"Both models read the same FLEURS test sentences with the same voices and seeds ({par['clips']:,} clips each), "
@@ -88,7 +97,12 @@ def _parity(recipe: Recipe, r: dict) -> str:
              f"- **Intelligibility.** FLEURS CER is {r['sets']['fleurs']['cer']:.3f} against {full}'s "
              f"{r['sets']['fleurs']['cer'] - par['cer_delta']:.3f}: a difference of {par['cer_delta']:+.4f} "
              f"(95% paired-bootstrap interval {low:+.4f} to {high:+.4f}).",
-             f"- **Reliability.** The failure rate differs by {par['failure_delta']:+.4f}.", "",
+             f"- **Reliability.** The failure rate differs by {par['failure_delta']:+.4f}."]
+    if teacher_sets:
+        names = [n for n in ("fleurs", "code_switching", "numbers") if n in r["sets"] and n in teacher_sets]
+        lines.append("- **Every set.** Mean CER of this model against " + full + "'s: "
+                     + "; ".join(f"{SETS.get(n, (n, ''))[0]} {r['sets'][n]['cer']:.3f} against {teacher_sets[n]['cer']:.3f}" for n in names) + ".")
+    lines += ["",
              f"| voice | region | CER | {full} CER | similarity drop | identification drop |", "|---|---|---|---|---|---|"]
     region = {v["name"]: v["region"] for v in recipe["voices"]}
     lines += [f"| {v} | {_region(region[v])} | {m['cer']:.3f} | {m['teacher_cer']:.3f} | {m['similarity_drop']:+.4f} | {m['identity_drop']:+.3f} |"
@@ -124,7 +138,9 @@ def variant_card(recipe: Recipe, work: Workdir, train_report: dict) -> str:
     speed_path = work.evaluation / "speed.json"
     speed = json.loads(speed_path.read_text()) if speed_path.exists() else None
     t, title, full = recipe["teacher"], recipe.title, recipe["teacher"]["title"]
-    repo, sub, model_id = recipe["publish"]["repo"], recipe["publish"]["subfolder"], "local/" + recipe["train"]["install_as"]
+    # brain serves a model-store folder under its path, so the downloaded subfolder is served under its own name.
+    repo, sub = recipe["publish"]["repo"], recipe["publish"]["subfolder"]
+    model_id = f"local/{sub}"
     own = parameters(work.release / "model.safetensors")
     codec = parameters(work.release / "speech_tokenizer" / "model.safetensors")
     full_params = compress["result"]["params_before"]
@@ -145,8 +161,16 @@ def variant_card(recipe: Recipe, work: Workdir, train_report: dict) -> str:
                   f"{evaluation['parity']['cer_delta']:+.4f} from {full}'s on the same clips.")
     if speed:
         proof += f" It speaks {speed['speedup']:.2f} times as fast on one GH200."
-    standing = (f"On the evaluation it is at parity with {full}: no worse in intelligibility, voice similarity, voice "
-                "identification or reliability than the margins in the table below." if passed else
+    teacher_report = work.root / recipe["evaluate"]["parity"]["teacher_evaluation"] / "report.json"
+    teacher_sets = json.loads(teacher_report.read_text()).get("sets") if teacher_report.exists() else None
+    # Sets beyond the gated FLEURS one where this model reads clearly worse than the full model: said, not hidden.
+    margin = recipe["evaluate"]["parity"]["cer_max_delta"]
+    weaker = [n for n in (evaluation or {}).get("sets", {}) if n != "fleurs" and teacher_sets and n in teacher_sets
+              and evaluation["sets"][n]["cer"] - teacher_sets[n]["cer"] > margin]
+    weaker_text = (" It reads " + _names([SETS.get(n, (n, ""))[0].lower() for n in weaker]) + " sentences less clearly than "
+                   f"{full} (CER " + ", ".join(f"{evaluation['sets'][n]['cer']:.3f} against {teacher_sets[n]['cer']:.3f}" for n in weaker) + ").") if weaker else ""
+    standing = (f"On FLEURS test sentences it is at parity with {full}: no worse in intelligibility, voice similarity, voice "
+                "identification or reliability than the margins in the parity table below." + weaker_text if passed else
                 f"The parity table below shows where it falls short of {full}." if evaluation else "")
     sections = [f"""---
 license: apache-2.0
@@ -229,7 +253,7 @@ The voices of {full}; pass the name as `speaker` (Python) or `voice` (HTTP).
     if speed:
         sections.append("## Size and speed\n\n" + _speed(recipe, speed, own, full_params, codec) + "\n")
     if evaluation:
-        sections.append(f"## Parity with {full}\n\n" + _parity(recipe, evaluation) + "\n")
+        sections.append(f"## Parity with {full}\n\n" + _parity(recipe, evaluation, teacher_sets) + "\n")
         sections.append(_evaluation(recipe, evaluation, title))
     best = result.get("best") or {}
     sections.append(f"""## How it was made
@@ -244,15 +268,15 @@ predictions are measured after each edit, before any training:
 **The recovery.** Distillation from {full} on its {hours} hours of training speech ({shard['records']:,} utterances): the loss is the
 ground-truth cross-entropy (weight {distill['gt_weight']:g}) plus the KL divergence from {full}'s predictions for the first
 codebook (weight {distill['talker_kd_weight']:g}) and the 15 residual codebooks (weight {distill['mtp_kd_weight']:g}), at
-temperature {distill['kd_temperature']:g}, with learning rate {train_report['request']['lr']:g}. {_run(train_report)}
-{f"On held-out speech its distillation loss (the KL terms to {full}) is {best['held_out_loss']:.4f}." if "held_out_loss" in best else ""}
+temperature {distill['kd_temperature']:g}{_hidden(distill)}, with learning rate {train_report['request']['lr']:g}. {_run(train_report)}
+{f"On held-out speech its distillation loss (the KL terms to {full}{' and the hidden-state error' if distill.get('hidden_kd_weight') else ''}) is {best['held_out_loss']:.4f}." if "held_out_loss" in best else ""}
 
 ## Limitations
 
 - Everything said about {full}'s limits holds here: 16 kHz training audio for most Swedish speech, read-speech voices
   recorded around 1999, no style instructions or voice cloning, text read as written (numbers and abbreviations are the
   weakest area), English trained only for English words inside Swedish text, no Finland Swedish.
-- A smaller model keeps less: compare the per-voice parity table before choosing it over {full} for a particular voice.
+- A smaller model keeps less: compare the per-voice parity table before choosing it over {full} for a particular voice.{chr(10) + "- " + weaker_text.strip() + " Prefer " + full + " where that matters." if weaker else ""}
 
 ## Licence and attribution
 

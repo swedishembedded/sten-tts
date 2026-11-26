@@ -69,10 +69,11 @@ def test_distillation_trains_the_cut_checkpoint_against_the_full_model_with_no_n
     assert json.loads(p["voices"]) == {v["name"]: {"new": False} for v in rec["voices"]}
     assert "new_row_lr_multiplier" not in p
     d = rec["train"]["distill"]
-    assert {k: p[k] for k in d} == d and "hidden_kd_layers" not in p
+    assert {k: p[k] for k in d if k != "hidden_kd_layers"} == {k: v for k, v in d.items() if k != "hidden_kd_layers"}
+    assert json.loads(p["hidden_kd_layers"]) == d["hidden_kd_layers"], "the layer pairs go as the JSON the job takes"
     t = rec["train"]
     assert p["steps"] == -(-1000 // (t["batch_utterances"] * t["grad_accum"] * 4)) * t["epochs"], "whole epochs over 4 cards"
-    assert p["install_as"] == rec["train"]["install_as"] and p["keep_best"] and p["patience"] == 4
+    assert p["install_as"] == rec["train"]["install_as"] and p["keep_best"] and p["patience"] == rec["train"]["patience"]
 
 
 def test_the_full_recipe_still_adds_its_language_and_voices(tmp_path: Path) -> None:

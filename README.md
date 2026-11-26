@@ -404,7 +404,7 @@ make publish WORKDIR="$WORK" RECIPE=$R HUB_DIR=<local mirror>
 | `train`, `evaluate` | the v2 run trains on those shards |
 | `export`, `publish-dataset` | the training collection as the public dataset `swedishembedded/sten-tts-voice` |
 | `publish` | done (guarded; refuses until `evaluate` passes) |
-| `compress`, `train`, `evaluate`, `speed` for `recipe/sten-tts-950m.yaml` | the first compact rung: cut to 952.6 M parameters (held-out KL 0.864 to the full model before recovery), then distilled on 4 cards |
+| `compress`, `train`, `evaluate`, `speed` for `recipe/sten-tts-950m.yaml` | the first compact rung, Sten-TTS-950M: cut to 952.6 M parameters (held-out KL 0.864 to the full model before recovery), distilled on 4 cards for 6 epochs with hidden-state matching; every release and parity gate passes (FLEURS CER 0.0635 against 0.0637) |
 
 ### The v2 corpus
 
