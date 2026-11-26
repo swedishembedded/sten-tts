@@ -32,7 +32,7 @@ _COMPRESS = {"max_parameters", "records", "held_out_records", "install_as", "pla
 _TRAIN_VARIANT = {"install_as", "epochs", "lr", "weight_decay", "warmup_fraction", "batch_utterances", "grad_accum", "max_frames",
                   "mtp_weight", "streaming_fraction", "eval_every", "eval_batches", "patience", "keep_best", "distill"}
 _DISTILL = {"gt_weight", "talker_kd_weight", "mtp_kd_weight", "hidden_kd_weight", "kd_temperature"}
-_PARITY = {"teacher_evaluation", "cer_max_delta", "similarity_max_drop", "identity_max_drop", "failure_max_delta"}
+_PARITY = {"gate", "teacher_evaluation", "cer_max_delta", "similarity_max_drop", "identity_max_drop", "failure_max_delta"}
 _SPEED = {"sentences", "voice", "warmup"}
 
 
@@ -109,6 +109,8 @@ def _load_variant(path: Path, raw: dict) -> Recipe:
         raise RecipeError(f"{path}: evaluate.parity is required: a variant is judged against its full model")
     _require(ev, {"parity"}, f"{path}: evaluate", optional={"speed"})
     _require(ev["parity"], _PARITY, f"{path}: evaluate.parity")
+    if not isinstance(ev["parity"]["gate"], bool):
+        raise RecipeError(f"{path}: evaluate.parity.gate must be true or false: whether parity with the full model blocks the release")
     if "speed" in ev:
         _require(ev["speed"], _SPEED, f"{path}: evaluate.speed")
         if ev["speed"]["voice"] not in {v["name"] for v in parent["voices"]}:

@@ -59,6 +59,7 @@ train:                                   # stage `train`: distillation from the 
 
 evaluate:                                # the full recipe's evaluation and gates, plus parity with the full model
   parity:
+    gate: true                             # only the first halving must be at parity with the full model
     teacher_evaluation: teacher          # the full model's evaluate output (clips.parquet, report.json, sentences.json)
     cer_max_delta: 0.0025                # FLEURS CER at most this above the full model's
     similarity_max_drop: 0.01            # per voice, similarity at most this below

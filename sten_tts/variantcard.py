@@ -90,10 +90,26 @@ def _cut(recipe: Recipe, compress: dict) -> str:
     return "\n".join(rows)
 
 
+def _short_of(full: str, r: dict) -> str:
+    """The plain statement of a variant that misses parity: which checks it fails, with the CER gap and its interval."""
+    par = r["parity"]
+    failed = [k for k, g in par["gates"].items() if not g["pass"]]
+    low, high = par["cer_delta_ci95"]
+    text = f"It is not at parity with {full}"
+    if "cer_delta_max" in failed:
+        text += (f": its FLEURS CER is {par['cer_delta']:.4f} higher (95% paired-bootstrap interval {low:.4f} to {high:.4f}), "
+                 f"more than the {par['gates']['cer_delta_max']['threshold']:g} parity allows")
+    others = {"similarity_drop_max": "voice similarity", "identity_drop_max": "voice identification", "failure_delta_max": "reliability"}
+    rest = [others[k] for k in failed if k in others]
+    if rest:
+        text += (" and" if "cer_delta_max" in failed else ":") + " it falls short in " + _names(rest)
+    return text + "."
+
+
 def _parity(recipe: Recipe, r: dict, teacher_sets: dict | None) -> str:
     par, full = r["parity"], recipe["teacher"]["title"]
     low, high = par["cer_delta_ci95"]
-    lines = [f"Both models read the same FLEURS test sentences with the same voices and seeds ({par['clips']:,} clips each), "
+    lines = ([_short_of(full, r), ""] if not all(g["pass"] for g in par["gates"].values()) else []) + [f"Both models read the same FLEURS test sentences with the same voices and seeds ({par['clips']:,} clips each), "
              "and the same recogniser and speaker encoder judged both, so the comparison is clip for clip.", "",
              f"- **Intelligibility.** FLEURS CER is {r['sets']['fleurs']['cer']:.3f} against {full}'s "
              f"{r['sets']['fleurs']['cer'] - par['cer_delta']:.3f}: a difference of {par['cer_delta']:+.4f} "
@@ -160,7 +176,7 @@ def variant_card(recipe: Recipe, work: Workdir, train_report: dict) -> str:
     voice_rows = "\n".join(f"| `{name}` | {v['gender']} | {_region(v['region'])} |" for name, v in voices.items())
     result = train_report["result"]
     distill = recipe["train"]["distill"]
-    passed = evaluation is not None and all(g["pass"] for k, g in evaluation["gates"].items() if k.startswith("parity_"))
+    passed = evaluation is not None and all(g["pass"] for g in evaluation["parity"]["gates"].values())
     proof = (f"{title}, {_m(own)} parameters cut out of the {_m(full_params)} {full} by weight surgery and recovered by "
              f"distillation in {_took(train_report)} on {train_report.get('ranks', 1)} GPUs.")
     if evaluation:
@@ -178,7 +194,7 @@ def variant_card(recipe: Recipe, work: Workdir, train_report: dict) -> str:
                    f"{full} (CER " + ", ".join(f"{evaluation['sets'][n]['cer']:.3f} against {teacher_sets[n]['cer']:.3f}" for n in weaker) + ").") if weaker else ""
     standing = (f"On FLEURS test sentences it is at parity with {full}: no worse in intelligibility, voice similarity, voice "
                 "identification or reliability than the margins in the parity table below." + weaker_text if passed else
-                f"The parity table below shows where it falls short of {full}." if evaluation else "")
+                _short_of(full, evaluation) + " The parity table below shows where." if evaluation else "")
     sections = [f"""---
 license: apache-2.0
 language:

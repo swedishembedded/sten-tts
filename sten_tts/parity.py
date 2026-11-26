@@ -30,6 +30,14 @@ def _clips(rows: list[dict]) -> dict[tuple, dict]:
     return {tuple(r[k] for k in KEY): r for r in rows if r["system"] == "sten" and r["set"] == "fleurs"}
 
 
+def merge(gates: dict, par: dict, gate: bool) -> dict:
+    """The release gates with the parity checks among them when parity is gated (`evaluate.parity.gate`); ungated,
+    parity is reported (in the evaluation's `parity` and the card) and never blocks the release."""
+    if gate:
+        gates.update({f"parity_{k}": v for k, v in par["gates"].items()})
+    return gates
+
+
 def compare(student_rows: list[dict], teacher_rows: list[dict], voices: list[str], spec: dict, seed: int = 0) -> dict:
     """The parity report and its gates. `spec` holds cer_max_delta, similarity_max_drop, identity_max_drop and failure_max_delta."""
     student, teacher = _clips(student_rows), _clips(teacher_rows)

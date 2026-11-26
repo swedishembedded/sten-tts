@@ -372,8 +372,11 @@ data, the voices, the evaluation sets and the release gates from it; it adds:
   codebooks, and the temperature); the held-out KL to the full model picks
   the checkpoint and stops the run;
 - `evaluate.parity`: the full model's evaluation directory and the margins the
-  variant must hold against it, clip for clip (FLEURS CER, and per voice
-  similarity, identification and failures), as extra gates;
+  variant is judged by against it, clip for clip (FLEURS CER, and per voice
+  similarity, identification and failures); with `gate: true` they are extra
+  release gates (the first halving), with `gate: false` they are reported in
+  the evaluation and the card, which then says plainly that the model is not at
+  parity, but do not block the release;
 - `evaluate.speed`: the sentences and voice the `speed` stage times;
 - `publish.subfolder`: the folder of the full model's repository it goes to.
 

@@ -46,6 +46,8 @@ def test_a_variant_inherits_the_data_voices_and_gates_and_adds_its_own_stages() 
     (lambda r: r["train"]["distill"].update(alpha=1), "unknown keys"),
     (lambda r: r["train"].pop("distill"), "missing keys"),
     (lambda r: r["evaluate"].pop("parity"), "parity"),
+    (lambda r: r["evaluate"]["parity"].pop("gate"), "gate"),
+    (lambda r: r["evaluate"]["parity"].update(gate="yes"), "gate"),
     (lambda r: r["publish"].pop("subfolder"), "subfolder"),
     (lambda r: r["compress"].update(plan=[e for e in r["compress"]["plan"] if "trim_vocabulary" not in e]), "corpus"),
     (lambda r: r.update(voices=[]), "unknown keys"),  # the data and voices are the full recipe's alone

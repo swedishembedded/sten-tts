@@ -61,3 +61,12 @@ def test_clips_that_do_not_pair_are_an_error_not_a_pass() -> None:
     teacher = clips(0.06)
     with pytest.raises(ValueError, match="pair"):
         parity.compare(clips(0.06)[:-5], teacher, VOICES, SPEC)
+
+
+def test_an_ungated_parity_is_reported_but_never_blocks_the_release() -> None:
+    gates = {"failure_rate_max": {"value": 0.0, "threshold": 0.02, "pass": True}}
+    par = parity.compare(clips(0.07), clips(0.06), VOICES, SPEC)
+    gated = parity.merge(dict(gates), par, gate=True)
+    assert "parity_cer_delta_max" in gated and not gated["parity_cer_delta_max"]["pass"]
+    assert parity.merge(dict(gates), par, gate=False) == gates, "ungated: the release gates alone"
+    assert par["gates"]["cer_delta_max"]["pass"] is False, "the parity report still holds every check"

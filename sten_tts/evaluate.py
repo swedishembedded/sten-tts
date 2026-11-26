@@ -253,12 +253,12 @@ def run(recipe: Recipe, work: Workdir, pool: BrainPool, concurrency: int, upstre
         teacher_rows = pq.read_table(teacher_dir / "clips.parquet", columns=["system", "set", "voice", "sentence", "seed", "cer", "similarity", "nearest", "failure"],
                                      filters=[("system", "=", "sten")]).to_pylist()
         par = parity.compare(rows, teacher_rows, voices, parity_spec, seed=recipe.seed)
-        gates.update({f"parity_{k}": v for k, v in par["gates"].items()})
+        gates = parity.merge(gates, par, parity_spec["gate"])
     report = {"gates": gates, "voices": per_voice, "base": {"cer": float(np.mean([r["cer"] for r in bs]))}, "floor": {"cer": floor},
               "paired_cer": paired, "failures": {k: sum(1 for r in st if r["failure"] == k) for k in ("silent", "length_cap", "too_long")},
               "upstream": upstream, "clips": len(rows), "sets": per_set(rows, region_of)}
     if parity_spec:
-        report["parity"] = par
+        report["parity"] = {**par, "gated": parity_spec["gate"]}
         report["carried"] = ({"from": parity_spec["teacher_evaluation"], "base_clips": len(carried["rows"]), "floor": True,
                               "why": "the same sentences, voices, seed and base model, and the same real-recording similarity per voice"}
                              if carried else None)

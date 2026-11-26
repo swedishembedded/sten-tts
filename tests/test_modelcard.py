@@ -98,9 +98,8 @@ def _header(path: Path, numel: int) -> None:
     path.write_bytes(len(header).to_bytes(8, "little") + header)
 
 
-def test_a_variant_card_states_its_size_cut_parity_speed_and_how_to_load_it(tmp_path: Path) -> None:
-    rec = config.load(VARIANT)
-    work = config.Workdir(tmp_path)
+def _variant_reports(rec: config.Recipe, work: config.Workdir, cer_delta: float = 0.001, ci: tuple = (-0.002, 0.004)) -> dict:
+    """Every report a variant card reads; parity off by `cer_delta` (CI `ci`). Answers the train report."""
     _run_reports(work, rec)
     names = [v["name"] for v in rec["voices"]]
     _header(work.release / "model.safetensors", 953_600_000)
@@ -125,7 +124,7 @@ def test_a_variant_card_states_its_size_cut_parity_speed_and_how_to_load_it(tmp_
     (work.evaluation / "report.json").write_text(json.dumps({
         "gates": gates, "voices": {n: {"cer": 0.065, "similarity": 0.70, "real_similarity": 0.71, "identity_accuracy": 1.0} for n in names},
         "base": {"cer": 0.102}, "floor": {"cer": 0.147}, "sets": sets, "paired_cer": {"mean_diff": -0.037, "ci95": [-0.049, -0.026], "n": 2400},
-        "upstream": {"status": "ok"}, "parity": {"cer_delta": 0.001, "cer_delta_ci95": [-0.002, 0.004], "failure_delta": 0.0, "voices": par_voices, "clips": 4800,
+        "upstream": {"status": "ok"}, "parity": {"cer_delta": cer_delta, "cer_delta_ci95": list(ci), "failure_delta": 0.0, "voices": par_voices, "clips": 4800,
                                                 "gates": {"cer_delta_max": gates["parity_cer_delta_max"]}}}))
     (work.evaluation / "speed.json").write_text(json.dumps({"device": "NVIDIA GH200 120GB", "voice": "astrid", "sentences": 20,
         "variant": {"real_time_factor": 0.21, "frames_per_second": 59.5}, "teacher": {"real_time_factor": 0.30, "frames_per_second": 41.7}, "speedup": 1.43}))
@@ -134,6 +133,13 @@ def test_a_variant_card_states_its_size_cut_parity_speed_and_how_to_load_it(tmp_
     teacher = work.root / rec["evaluate"]["parity"]["teacher_evaluation"]
     teacher.mkdir()
     (teacher / "report.json").write_text(json.dumps({"sets": {"fleurs": {"cer": 0.064}, "code_switching": {"cer": 0.050}, "numbers": {"cer": 0.070}}}))
+    return report
+
+
+def test_a_variant_card_states_its_size_cut_parity_speed_and_how_to_load_it(tmp_path: Path) -> None:
+    rec = config.load(VARIANT)
+    work = config.Workdir(tmp_path)
+    report = _variant_reports(rec, work)
     card = modelcard.model_card(rec, work, report)
 
     assert "It reads code-switching sentences less clearly than Sten-TTS-1.7B (CER 0.065 against 0.050)" in card, "a weaker set is said"
@@ -149,3 +155,18 @@ def test_a_variant_card_states_its_size_cut_parity_speed_and_how_to_load_it(tmp_
     assert "step 2400 of 3200" in card and "4 NVIDIA GH200 GPUs" in card
     for internal in ("gate", "Pending", "TODO", "teacher", "student"):
         assert internal not in card, f"{internal!r} is not for the card's reader"
+
+
+def test_an_ungated_variant_that_misses_parity_says_so_plainly(tmp_path: Path) -> None:
+    rec = config.load(VARIANT.parent / "sten-tts-475m.yaml")
+    work = config.Workdir(tmp_path)
+    report = _variant_reports(rec, work, cer_delta=0.0125, ci=(0.0103, 0.0150))
+    r = json.loads((work.evaluation / "report.json").read_text())
+    r["parity"]["gates"]["cer_delta_max"] = {"value": 0.0125, "threshold": 0.0025, "pass": False}
+    r["gates"].pop("parity_cer_delta_max")  # ungated: not a release gate
+    (work.evaluation / "report.json").write_text(json.dumps(r))
+    card = modelcard.model_card(rec, work, report)
+    head, parity_section = card.split("## Parity with Sten-TTS-1.7B")
+    expected = "It is not at parity with Sten-TTS-1.7B: its FLEURS CER is 0.0125 higher (95% paired-bootstrap interval 0.0103 to 0.0150)"
+    assert expected in head and expected in parity_section, "said in the description and in the parity section"
+    assert "at parity with Sten-TTS-1.7B: no worse" not in card
