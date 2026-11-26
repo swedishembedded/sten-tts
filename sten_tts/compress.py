@@ -77,7 +77,7 @@ def parameters(safetensors: Path) -> int:
 
 def check(report: dict, checkpoint: Path, max_parameters: int) -> int:
     """The cut's parameter count, after refusing one over the rung or one that reads a training text differently."""
-    changed = {k: v for k, v in report.get("vocabulary", {}).items() if k.endswith("_changed") and not k.startswith("probe") and v}
+    changed = {k: v for k, v in (report.get("vocabulary") or {}).items() if k.endswith("_changed") and not k.startswith("probe") and v}
     if changed:
         raise RuntimeError(f"the trimmed vocabulary tokenises training texts differently: {changed}")
     n = parameters(checkpoint / "model.safetensors")

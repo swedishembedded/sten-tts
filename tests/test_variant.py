@@ -115,6 +115,7 @@ def test_the_cut_is_refused_if_it_is_larger_than_the_rung_or_changes_how_a_train
     assert compress.parameters(ck / "model.safetensors") == 900_050
     ok = {"vocabulary": {"corpus_changed": 0, "probe_changed": 3}}
     compress.check(ok, ck, max_parameters=900_050)
+    compress.check({"vocabulary": None}, ck, max_parameters=900_050)  # a plan without a vocabulary trim
     with pytest.raises(RuntimeError, match="900,050 parameters"):
         compress.check(ok, ck, max_parameters=900_000)
     with pytest.raises(RuntimeError, match="corpus_changed"):
