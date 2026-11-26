@@ -163,9 +163,11 @@ dataset:                               # stages `export` and `publish-dataset`: 
 publish:
   repo: swedishembedded/sten-tts          # the local mirror of this repository is given to `publish --hub-dir`
   private: false                        # public since 2026-11-25; a new repository is still created private and opened only after a complete upload
-  family:                                 # the compact variants the card lists, each read from its run's evidence (compact/<name>/)
-    - sten-tts-950m.yaml
-    - sten-tts-475m.yaml
+  family:                                 # the published compact variants the card lists, each read from its run's evidence (compact/<name>/)
+    - sten-tts-950m.yaml                  # sten-tts-475m.yaml joins once its release is published
+  comparison:                             # stage `samples`: every voice in every size on these evaluation sentences, played on the card
+    seed: 1
+    sentences: [fleurs:1829, cs01, nu01]  # a FLEURS test sentence, an English word in Swedish, numbers and a time
   samples:                                # the clips the model card plays: evaluation clips, unpicked (stage `samples`)
     seed: 1                               # the evaluation seed whose take is used
     order: [axel, astrid, erik, linnea, viktor, elsa, oskar, maja, nils, signe, arvid, ingrid]

@@ -149,10 +149,19 @@ def load(path: str | Path) -> Recipe:
         _require(live["weights"], {"f0_range", "f0_sd", "energy_sd", "syllable_rate"}, f"{path}: liveliness.weights")
     if "dataset" in raw:
         _require(raw["dataset"], {"repo", "name", "rows_per_shard"}, f"{path}: dataset")
-    _require(raw["publish"], {"repo", "private"}, f"{path}: publish", optional={"samples", "subfolder", "family"})
+    _require(raw["publish"], {"repo", "private"}, f"{path}: publish", optional={"samples", "subfolder", "family", "comparison"})
     family = raw["publish"].get("family", [])
     if not isinstance(family, list) or not all(isinstance(f, str) for f in family):
         raise RecipeError(f"{path}: publish.family must list variant recipe files (relative to this one)")
+    if "comparison" in raw["publish"]:
+        cmp = raw["publish"]["comparison"]
+        _require(cmp, {"seed", "sentences"}, f"{path}: publish.comparison")
+        if "samples" not in raw["publish"] or not family:
+            raise RecipeError(f"{path}: publish.comparison needs publish.samples (the voice order) and publish.family (the sizes)")
+        if cmp["seed"] not in raw["evaluate"]["seeds"]:
+            raise RecipeError(f"{path}: publish.comparison.seed {cmp['seed']} is not an evaluation seed {raw['evaluate']['seeds']}")
+        if not cmp["sentences"] or not all(isinstance(x, str) for x in cmp["sentences"]):
+            raise RecipeError(f"{path}: publish.comparison.sentences must list evaluation sentence ids")
     if "parity" in raw["evaluate"]:
         raise RecipeError(f"{path}: evaluate.parity belongs to a variant recipe (one with variant_of)")
     if "samples" in raw["publish"]:

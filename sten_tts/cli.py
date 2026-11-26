@@ -105,6 +105,10 @@ def main(argv: list[str] | None = None) -> None:
         from . import samples
         from .modelcard import model_card
         print(json.dumps(samples.write(recipe, work), ensure_ascii=False, indent=1))
+        if "comparison" in recipe["publish"]:
+            from . import comparison
+            listing = comparison.write(recipe, work)
+            print(f"samples: comparison of {len(listing['models'])} sizes on {len(listing['sentences'])} sentences", flush=True)
         (work.release / "README.md").write_text(model_card(recipe, work, json.loads((work.train / "report.json").read_text())))
     elif a.stage == "publish-dataset":
         from . import publish_dataset

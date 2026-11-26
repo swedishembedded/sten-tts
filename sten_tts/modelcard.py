@@ -18,6 +18,7 @@ from __future__ import annotations
 import json
 from collections import Counter
 
+from . import comparison
 from .config import Recipe, Workdir
 from .offer import model_offer
 
@@ -291,7 +292,7 @@ Each voice is an anonymous speaker of the NST Swedish speech database (CC0-1.0),
 their gender and region by pitch variation, loudness dynamics and speaking rate. The region is where the speaker grew
 up. The recordings are read sentences, so expect a regional accent rather than dialect.
 
-{_evaluation(recipe, evaluation) if evaluation else ""}{_family(recipe, work)}
+{_evaluation(recipe, evaluation) if evaluation else ""}{_family(recipe, work)}{comparison.section(recipe, work)}
 ## Training
 
 - **Base model:** [{base['repo']}](https://huggingface.co/{base['repo']}), revision `{base['revision']}`.
