@@ -106,8 +106,10 @@ def main(argv: list[str] | None = None) -> None:
         from .modelcard import model_card
         print(json.dumps(samples.write(recipe, work), ensure_ascii=False, indent=1))
         if "comparison" in recipe["publish"]:
-            from . import comparison
-            listing = comparison.write(recipe, work)
+            from . import brainclient, comparison
+            fresh = any(isinstance(e, dict) for e in recipe["publish"]["comparison"]["sentences"])
+            pool = brainclient.connect(a.brain_transport, a.brain_bus or ["session"], a.brain_key_file, a.brain_ca_file) if fresh else None
+            listing = comparison.write(recipe, work, pool, a.concurrency)
             print(f"samples: comparison of {len(listing['models'])} sizes on {len(listing['sentences'])} sentences", flush=True)
         (work.release / "README.md").write_text(model_card(recipe, work, json.loads((work.train / "report.json").read_text())))
     elif a.stage == "publish-dataset":

@@ -160,8 +160,13 @@ def load(path: str | Path) -> Recipe:
             raise RecipeError(f"{path}: publish.comparison needs publish.samples (the voice order) and publish.family (the sizes)")
         if cmp["seed"] not in raw["evaluate"]["seeds"]:
             raise RecipeError(f"{path}: publish.comparison.seed {cmp['seed']} is not an evaluation seed {raw['evaluate']['seeds']}")
-        if not cmp["sentences"] or not all(isinstance(x, str) for x in cmp["sentences"]):
-            raise RecipeError(f"{path}: publish.comparison.sentences must list evaluation sentence ids")
+        if not cmp["sentences"]:
+            raise RecipeError(f"{path}: publish.comparison.sentences is empty")
+        for x in cmp["sentences"]:
+            if isinstance(x, dict):
+                _require(x, {"id", "text"}, f"{path}: publish.comparison.sentences", optional={"references"})
+            elif not isinstance(x, str):
+                raise RecipeError(f"{path}: publish.comparison.sentences: an evaluation sentence id or {{id, text, references}}, got {x!r}")
     if "parity" in raw["evaluate"]:
         raise RecipeError(f"{path}: evaluate.parity belongs to a variant recipe (one with variant_of)")
     if "samples" in raw["publish"]:

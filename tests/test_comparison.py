@@ -68,3 +68,40 @@ def test_without_a_comparison_the_card_has_no_section(tmp_path: Path) -> None:
     rec.raw["publish"].pop("comparison", None)
     assert comparison.section(rec, config.Workdir(tmp_path)) == ""
     assert json.dumps(rec["publish"])  # the recipe stays valid without the key
+
+
+class FakeBrain:
+    """Speaks a model's name, voice, text and seed as the clip; hears what was said."""
+    def __init__(self):
+        self.calls = []
+    def get(self):
+        return self
+    def run(self, model, action, params, blobs=None, meta=None):
+        self.calls.append((model, action, params))
+        if action == "design":
+            return type("O", (), {"blobs": {"audio": f"{model}|{params['speaker']}|{params['text']}|{params['seed']}".encode()}})()
+        return type("O", (), {"text": lambda self, k: "Tåget avgår klockan fjorton och trettio från spår tre."})()
+
+
+def test_a_sentence_given_as_text_is_spoken_fresh_by_every_size(tmp_path: Path, monkeypatch) -> None:
+    rec = config.load(RECIPES / "sten-tts-1.7b-v2.yaml")
+    rec.raw["publish"]["family"] = ["sten-tts-950m.yaml"]
+    text = "Tåget avgår klockan 14.30 från spår 3."
+    spoken = "Tåget avgår klockan fjorton och trettio från spår tre."
+    rec.raw["publish"]["comparison"] = {"seed": 1, "sentences": ["fleurs:7", {"id": "train", "text": text, "references": [text, spoken]}]}
+    variant = config.load(RECIPES / "sten-tts-950m.yaml")
+    voices = [v["name"] for v in rec["voices"]]
+    work = config.Workdir(tmp_path)
+    clips(work.evaluation / "clips.parquet", "full", voices, ["fleurs:7"])
+    clips(work.root / "compact" / variant.name / "evaluation" / "clips.parquet", "small", voices, ["fleurs:7"])
+    monkeypatch.setattr(comparison, "_pcm16k", lambda wav: b"")
+    brain = FakeBrain()
+    listing = comparison.write(rec, work, brain)
+    voice = rec["publish"]["samples"]["order"][0]
+    small = (work.release / listing["clips"]["train"][voice][1]["file"]).read_bytes().decode()
+    assert small == f"local/{variant['train']['install_as']}|{voice}|{text}|1"
+    assert listing["clips"]["train"][voice][0]["cer"] == 0.0, "scored against the closest reference: the spoken form"
+    assert {s["id"]: s["text"] for s in listing["sentences"]}["train"] == text
+    assert sum(1 for c in brain.calls if c[1] == "design") == 2 * len(voices)
+    with pytest.raises(RuntimeError, match="brain"):
+        comparison.write(rec, work, None)
