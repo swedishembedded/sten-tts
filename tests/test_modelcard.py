@@ -26,6 +26,7 @@ def _run_reports(work: config.Workdir, rec: config.Recipe, records: int = 194769
 
 def test_the_card_serves_a_user_and_takes_every_result_from_the_report(tmp_path: Path) -> None:
     rec = config.load(RECIPE)
+    rec.raw["publish"].pop("family")  # the variants' evidence is another test's
     work = config.Workdir(tmp_path)
     _run_reports(work, rec)
     work.evaluation.mkdir(parents=True)
@@ -78,6 +79,7 @@ def test_the_card_serves_a_user_and_takes_every_result_from_the_report(tmp_path:
 
 def test_a_fleet_run_names_its_cards_and_the_released_checkpoint(tmp_path: Path) -> None:
     rec = config.load(RECIPE)
+    rec.raw["publish"].pop("family")  # the variants' evidence is another test's
     work = config.Workdir(tmp_path)
     _run_reports(work, rec)
     result = {"initial_loss": 3.7, "final_loss": 2.2, "checkpoint": "best", "best": {"step": 1100, "held_out_loss": 2.3595},

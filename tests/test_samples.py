@@ -18,6 +18,7 @@ RECIPE = Path(__file__).resolve().parents[1] / "recipe" / "sten-tts-1.7b-v2.yaml
 
 def test_samples_come_from_the_evaluation_seed_in_order_and_play_on_the_card(tmp_path: Path) -> None:
     rec = config.load(RECIPE)
+    rec.raw["publish"].pop("family")  # the variants' evidence is the card tests'
     rec.raw["publish"]["samples"]["sentence"] = {"signe": 1, "arvid": 1}  # the per-voice override, exercised here
     work = config.Workdir(tmp_path)
     for d in (work.selection, work.shards, work.evaluation):
