@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright (c) 2026 Martin Schröder <info@swedishembedded.com>
+#
+# Swedish Embedded AB implements compression of speech models to the hardware a
+# product has, without audible loss, for its clients. If your team needs
+# expertise in shrinking text-to-speech models, you can procure our services by
+# sending an email to info@swedishembedded.com.
+#
+# Sten-TTS-475M: half of Sten-TTS-950M, cut out of it by weight surgery and recovered by distillation from
+# Sten-TTS-1.7B (the full model always teaches; the earlier rung only gives the starting point). The data, voices,
+# evaluation sets and gates are the full recipe's, as for every variant.
+
+name: sten-tts-475m
+title: Sten-TTS-475M
+variant_of: sten-tts-1.7b-v2.yaml        # relative to this file
+teacher:                                 # the full model: the source of the surgery and the teacher of the recovery
+  model: local/sten-tts-1.7b-v2          # its id in brain's model store
+  title: Sten-TTS-1.7B
+  repo: swedishembedded/sten-tts
+  parameters: 1916676352                 # in its model.safetensors
+
+compress:                                # stage `compress`: brain `speech_surgery` on rung 1, measured against the full model
+  from: {model: local/sten-tts-950m-r3, title: Sten-TTS-950M}
+  max_parameters: 476000000              # in model.safetensors; half of Sten-TTS-950M's 952.6 M
+  records: 128
+  held_out_records: 128
+  install_as: sten-tts-475m-pruned
+  plan:                                  # applied in brain's order: fold, channels, rotation, layers
+    - fold_embedding: {fold: talker.text, keep: 1024, score: wanda}                # text projection input 2048 -> 1024
+    - select_channels: {dims: "talker.layers.*.mlp", keep: 1152, score: fisher}    # Talker MLP 2560 -> 1152
+    - select_channels: {dims: "talker.layers.*.kv_heads", keep: 6, score: taylor}  # 6 of 8 KV groups with their queries
+    - rotate_stream: {stream: talker, width: 1536, basis: pca, gain_tolerance: 0.25}  # Talker width 2048 -> 1536
+    - remove_layers: {stack: talker.layers, count: 3, by: kl, greedy: true}         # 24 -> 21 Talker layers
+  # Held-out KL to the full model before recovery (128 records): this plan 2.858. Keeping 6 KV groups bought layers
+  # (8 groups, MLP 1504, 16 layers: 3.227; 4 groups: 3.35-3.42); a fresh cut of the full model to the same size
+  # measured 4.80-5.98. See the brain roadmap's compression ledger.
+
+train:                                   # stage `train`: distillation from the teacher on the v2 shards
+  install_as: sten-tts-475m
+  epochs: 6                              # at most: held-out KL to the teacher picks the checkpoint and stops the run
+  lr: 5.0e-5                             # at a global batch of 128; the best of 1e-5..4e-4 in 150-step probes
+  weight_decay: 0.01
+  warmup_fraction: 0.03
+  batch_utterances: 16                   # per card: with the full model beside it, 32 utterances at 375 frames need ~123 GiB
+  grad_accum: 1                          # 16 x 8 cards = 128 utterances a step
+  max_frames: 375
+  mtp_weight: 0.3
+  streaming_fraction: 0.5
+  eval_every: 100
+  eval_batches: 16                       # 256 held-out records: 8 batches let noise stop the first run at step 3400
+  patience: 10
+  keep_best: true
+  distill:                               # L = gt CE + T^2 KL(teacher || student) on codebook 0 and the 15 residual codebooks
+    gt_weight: 1.0
+    talker_kd_weight: 1.0
+    mtp_kd_weight: 0.02
+    hidden_kd_weight: 0.1
+    hidden_kd_layers: [[5, 5], [10, 14], [15, 20], [21, 28]]   # the cut's residual streams and the full model's they came from
+    kd_temperature: 1.0
+
+evaluate:                                # the full recipe's evaluation and gates, plus parity with the full model
+  parity:
+    teacher_evaluation: teacher          # the full model's evaluate output (clips.parquet, report.json, sentences.json)
+    cer_max_delta: 0.0025                # FLEURS CER at most this above the full model's
+    similarity_max_drop: 0.01            # per voice, similarity at most this below
+    identity_max_drop: 0.02              # per voice, nearest-voice accuracy at most this below
+    failure_max_delta: 0.005             # failure rate at most this above
+  speed:                                 # stage `speed`: one request at a time on one card, variant and full model
+    sentences: 20                        # the first FLEURS evaluation sentences
+    voice: astrid
+    warmup: 2                            # requests before the timed ones
+
+publish:
+  subfolder: sten-tts-475m               # beside the full model in the same repository
