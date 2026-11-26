@@ -24,7 +24,7 @@ compress:                                # stage `compress`: brain `speech_surge
   max_parameters: 476000000              # in model.safetensors; half of Sten-TTS-950M's 952.6 M
   records: 128
   held_out_records: 128
-  install_as: sten-tts-475m-pruned
+  install_as: sten-tts-475m-cut          # the unrecovered checkpoint (with its speaker projection)
   plan:                                  # applied in brain's order: fold, channels, rotation, layers
     - fold_embedding: {fold: talker.text, keep: 1024, score: wanda}                # text projection input 2048 -> 1024
     - select_channels: {dims: "talker.layers.*.mlp", keep: 1152, score: fisher}    # Talker MLP 2560 -> 1152
