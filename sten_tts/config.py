@@ -100,7 +100,7 @@ def _load_variant(path: Path, raw: dict) -> Recipe:
     if not isinstance(c["max_parameters"], int) or c["max_parameters"] <= 0:
         raise RecipeError(f"{path}: compress.max_parameters must be a positive integer")
     t = raw["train"]
-    _require(t, _TRAIN_VARIANT, f"{path}: train")
+    _require(t, _TRAIN_VARIANT, f"{path}: train", optional={"start_from"})
     _require(t["distill"], _DISTILL, f"{path}: train.distill", optional={"hidden_kd_layers"})
     if c["install_as"] == t["install_as"]:
         raise RecipeError(f"{path}: compress.install_as and train.install_as must differ")

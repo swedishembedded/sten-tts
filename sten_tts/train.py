@@ -65,7 +65,8 @@ def request(recipe: Recipe, work: Workdir, ranks: int = 1) -> dict:
     }
     if recipe.is_variant:
         # The cut checkpoint is its own base and already holds the language and the voices; the full model teaches it.
-        params.update({"base": "local/" + recipe["compress"]["install_as"], "teacher": recipe["teacher"]["model"],
+        # The cut is the starting point, or an earlier recovery of it, which a run continues (`train.start_from`).
+        params.update({"base": t.get("start_from", "local/" + recipe["compress"]["install_as"]), "teacher": recipe["teacher"]["model"],
                        "languages": json.dumps({name: {"new": False} for name in languages}),
                        "voices": json.dumps({v["name"]: {"new": False} for v in recipe["voices"]})})
         d = t["distill"]

@@ -152,3 +152,9 @@ def _shards_in(root: Path) -> config.Workdir:
     work = config.Workdir(root)
     _shards(work)
     return work
+
+
+def test_a_recovery_may_continue_an_earlier_one_of_the_same_cut(tmp_path: Path) -> None:
+    rec = config.load(_variant(tmp_path, lambda r: r["train"].update(start_from="local/sten-tts-950m-b")))
+    p = train.request(rec, _shards_in(tmp_path / "w"), ranks=4)
+    assert p["base"] == "local/sten-tts-950m-b" and p["teacher"] == rec["teacher"]["model"]
