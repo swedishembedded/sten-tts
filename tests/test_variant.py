@@ -47,6 +47,7 @@ def test_a_variant_inherits_the_data_voices_and_gates_and_adds_its_own_stages() 
     (lambda r: r["train"].pop("distill"), "missing keys"),
     (lambda r: r["evaluate"].pop("parity"), "parity"),
     (lambda r: r["publish"].pop("subfolder"), "subfolder"),
+    (lambda r: r["compress"].update(plan=[e for e in r["compress"]["plan"] if "trim_vocabulary" not in e]), "corpus"),
     (lambda r: r.update(voices=[]), "unknown keys"),  # the data and voices are the full recipe's alone
 ])
 def test_a_malformed_variant_is_refused_by_name(tmp_path: Path, edit, message: str) -> None:
@@ -126,3 +127,27 @@ def test_speed_is_wall_time_over_audio_time_and_codec_frames_a_second() -> None:
     assert s["real_time_factor"] == 0.25 and s["frames_per_second"] == 50.0 and s["requests"] == 2
     with pytest.raises(ValueError):
         speed.summarize([])
+
+
+def test_a_variant_may_be_cut_from_an_earlier_rung_and_is_still_measured_against_the_full_model(tmp_path: Path) -> None:
+    def from_rung1(r):
+        r["compress"]["from"] = {"model": "local/sten-tts-950m-r3", "title": "Sten-TTS-950M"}
+        r["compress"]["plan"] = [p for p in r["compress"]["plan"] if "trim_vocabulary" not in p]
+        r["compress"].pop("corpus")
+    rec = config.load(_variant(tmp_path, from_rung1))
+    work = config.Workdir(tmp_path)
+    work.evaluation.mkdir(parents=True)
+    (work.evaluation / "sentences.json").write_text(json.dumps({"fleurs": [{"id": "f:0", "text": "Hej."}]}))
+    params, _ = compress.request(rec, work)
+    assert params["base"] == "local/sten-tts-950m-r3"
+    assert params["shard_tokenizer"] == params["reference"] == rec["teacher"]["model"], "shards and measurement are the full model's"
+    p = train.request(rec, _shards_in(tmp_path / "w"), ranks=4)
+    assert p["teacher"] == rec["teacher"]["model"], "the full model teaches, never the earlier rung"
+    with pytest.raises(config.RecipeError, match="from"):
+        config.load(_variant(tmp_path, lambda r: r["compress"].update({"from": {"model": "x"}})))
+
+
+def _shards_in(root: Path) -> config.Workdir:
+    work = config.Workdir(root)
+    _shards(work)
+    return work

@@ -13,7 +13,9 @@ calibrates the full model on records of the training shard, applies the plan's
 edits in its own order, measures each edit's loss and KL divergence from the
 full model's predictions on validation records, and publishes the narrower
 checkpoint in the upstream layout, installed as the student the `train` stage
-starts from. The evaluation sentences go along as the vocabulary trim's probe,
+starts from. A recipe may cut an earlier rung instead (`compress.from`); the
+shards are then read through the full model's tokens and every edit is
+measured against the full model. The evaluation sentences go along as the vocabulary trim's probe,
 so its report says how many of them would read differently; with
 `compress.corpus: inventory` the texts of every candidate utterance of the full
 run's inventory go along as its corpus, whose tokens the trim keeps too.
@@ -44,6 +46,10 @@ def request(recipe: Recipe, work: Workdir) -> tuple[dict, dict[str, bytes]]:
     c = recipe["compress"]
     params = {"base": recipe["teacher"]["model"], "plan": json.dumps(c["plan"]), "records": c["records"],
               "held_out_records": c["held_out_records"], "install_as": c["install_as"]}
+    if "from" in c:
+        # A cut of an earlier rung: the shards are still the full model's tokens, and every edit is measured
+        # against the full model, not against the rung it starts from.
+        params.update({"base": c["from"]["model"], "shard_tokenizer": recipe["teacher"]["model"], "reference": recipe["teacher"]["model"]})
     sets = json.loads((work.evaluation / "sentences.json").read_text())
     probe = [s["text"].replace("\n", " ") for items in sets.values() for s in items]
     blobs = {"probe": _lines(probe)}

@@ -19,6 +19,7 @@ teacher:                                 # the full model: the source of the sur
   model: local/sten-tts-1.7b-v2          # its id in brain's model store
   title: Sten-TTS-1.7B
   repo: swedishembedded/sten-tts
+  parameters: 1916676352                 # in its model.safetensors
 
 compress:                                # stage `compress`: brain `speech_surgery` on the teacher
   max_parameters: 958000000              # in model.safetensors; the codec is shared and counted apart

@@ -81,8 +81,9 @@ def _hidden(distill: dict) -> str:
 def _cut(recipe: Recipe, compress: dict) -> str:
     out = compress["result"]
     manifest = out["manifest"]["manifest"]["edits"]  # the job reports surgery.json: {"manifest", "outcome"}
+    source = recipe["compress"].get("from", {}).get("title", "the full model")
     rows = ["| edit | parameters after | loss | KL to the full model |", "|---|---|---|---|",
-            f"| the full model | {_m(out['params_before'])} | {out['baseline']['loss']:.3f} | 0 |"]
+            f"| {source} | {_m(out['params_before'])} | {out['baseline']['loss']:.3f} | {out['baseline'].get('kl', 0.0):.3f} |"]
     for entry, measured in zip(manifest, out["edits"]):
         rows.append(f"| {describe(entry['change'], entry['method'], out.get('vocabulary', {}))} | {_m(measured['params_after'])} | "
                     f"{measured['loss']:.3f} | {measured['kl']:.3f} |")
@@ -143,7 +144,13 @@ def variant_card(recipe: Recipe, work: Workdir, train_report: dict) -> str:
     model_id = f"local/{sub}"
     own = parameters(work.release / "model.safetensors")
     codec = parameters(work.release / "speech_tokenizer" / "model.safetensors")
-    full_params = compress["result"]["params_before"]
+    full_params = t["parameters"]
+    source = recipe["compress"].get("from")
+    frac = own / full_params
+    size = "half the size" if 0.4 < frac < 0.6 else "a quarter of the size" if 0.2 < frac < 0.3 else f"{frac:.0%} of the size"
+    origin = (f"It was cut out of {source['title']}, the previous compact model, itself cut from {full}, by removing the parts it "
+              "needs least, measured on its own speech against " + full + "," if source else
+              f"It was cut out of {full} by removing the parts it needs least, measured on its own speech,")
     hours = f"{shard['hours']:g}"
     languages = [recipe["language"]["name"], *recipe["language"].get("base_languages", [])]
     lang_yaml = "\n".join(f"- {ISO.get(l, l)}" for l in languages)
@@ -192,9 +199,9 @@ pipeline_tag: text-to-speech
 
 {model_offer(proof)}
 
-{title} is [{full}](https://huggingface.co/{t['repo']}) at half the size: {_m(own)} parameters against {_m(full_params)},
+{title} is [{full}](https://huggingface.co/{t['repo']}) at {size}: {_m(own)} parameters against {_m(full_params)},
 with the same {len(voices)} named Swedish voices ({genders['female']} female, {genders['male']} male), the same languages and
-the same 24 kHz output. It was cut out of {full} by removing the parts it needs least, measured on its own speech,
+the same 24 kHz output. {origin}
 and then trained to predict what {full} predicts on the same {hours} hours of speech. {standing} It loads in the upstream
 `qwen-tts` package without conversion and lives in the `{sub}/` folder of the {full} repository.
 The speech codec ({_m(codec)} parameters) is shared with {full} and counted separately.
@@ -258,7 +265,7 @@ The voices of {full}; pass the name as `speaker` (Python) or `voice` (HTTP).
     best = result.get("best") or {}
     sections.append(f"""## How it was made
 
-**The cut.** Weight surgery on {full}, calibrated on {compress['request']['records']} training utterances and measured
+**The cut.** Weight surgery on {source['title'] if source else full}, calibrated on {compress['request']['records']} training utterances and measured
 on {compress['request']['held_out_records']} held-out ones. Each edit keeps the upstream layout (fewer layers, narrower
 dimensions, a smaller vocabulary), so the result is an ordinary checkpoint. Loss and KL divergence from {full}'s
 predictions are measured after each edit, before any training:

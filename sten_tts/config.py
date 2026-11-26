@@ -27,7 +27,7 @@ _SEGMENT = {"source", "min_seconds", "max_seconds", "min_pause_seconds", "silenc
 # A compact variant names the full recipe it is carved from and takes the data, voices, evaluation and gates
 # from it; these are all it may set.
 _VARIANT_TOP = {"name", "title", "variant_of", "teacher", "compress", "train", "evaluate", "publish"}
-_TEACHER = {"model", "title", "repo"}
+_TEACHER = {"model", "title", "repo", "parameters"}
 _COMPRESS = {"max_parameters", "records", "held_out_records", "install_as", "plan"}
 _TRAIN_VARIANT = {"install_as", "epochs", "lr", "weight_decay", "warmup_fraction", "batch_utterances", "grad_accum", "max_frames",
                   "mtp_weight", "streaming_fraction", "eval_every", "eval_batches", "patience", "keep_best", "distill"}
@@ -88,11 +88,15 @@ def _load_variant(path: Path, raw: dict) -> Recipe:
         raise RecipeError(f"{path}: variant_of names another variant; a variant is carved from a full model")
     _require(raw["teacher"], _TEACHER, f"{path}: teacher")
     c = raw["compress"]
-    _require(c, _COMPRESS, f"{path}: compress", optional={"corpus"})
+    _require(c, _COMPRESS, f"{path}: compress", optional={"corpus", "from"})
+    if "from" in c:
+        _require(c["from"], {"model", "title"}, f"{path}: compress.from")
     if c.get("corpus", "inventory") != "inventory":
         raise RecipeError(f"{path}: compress.corpus must be `inventory` (the full run's candidate utterance texts) or left out")
     if not isinstance(c["plan"], list) or not c["plan"] or not all(isinstance(e, dict) and len(e) == 1 for e in c["plan"]):
         raise RecipeError(f"{path}: compress.plan must be a non-empty list of one-key edits")
+    if "corpus" in c and not any("trim_vocabulary" in e for e in c["plan"]):
+        raise RecipeError(f"{path}: compress.corpus serves a trim_vocabulary edit, and the plan has none")
     if not isinstance(c["max_parameters"], int) or c["max_parameters"] <= 0:
         raise RecipeError(f"{path}: compress.max_parameters must be a positive integer")
     t = raw["train"]
