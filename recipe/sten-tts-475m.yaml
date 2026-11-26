@@ -36,9 +36,9 @@ compress:                                # stage `compress`: brain `speech_surge
   # measured 4.80-5.98. See the brain roadmap's compression ledger.
 
 train:                                   # stage `train`: distillation from the teacher on the v2 shards
-  install_as: sten-tts-475m
+  install_as: sten-tts-475m-b            # recovery B; C continued it for 6 epochs at 5e-5 (start_from), +0.0125
   epochs: 6                              # at most: held-out KL to the teacher picks the checkpoint and stops the run
-  lr: 5.0e-5                             # at a global batch of 128; the best of 1e-5..4e-4 in 150-step probes
+  lr: 1.0e-4                             # at a global batch of 128: FLEURS CER +0.0136 to the full model, against +0.0179 at 5e-5
   weight_decay: 0.01
   warmup_fraction: 0.03
   batch_utterances: 16                   # per card: with the full model beside it, 32 utterances at 375 frames need ~123 GiB
