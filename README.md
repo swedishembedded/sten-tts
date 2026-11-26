@@ -405,6 +405,7 @@ make publish WORKDIR="$WORK" RECIPE=$R HUB_DIR=<local mirror>
 | `export`, `publish-dataset` | the training collection as the public dataset `swedishembedded/sten-tts-voice` |
 | `publish` | done (guarded; refuses until `evaluate` passes) |
 | `compress`, `train`, `evaluate`, `speed` for `recipe/sten-tts-950m.yaml` | the first compact rung, Sten-TTS-950M: cut to 952.6 M parameters (held-out KL 0.864 to the full model before recovery), distilled on 4 cards for 6 epochs with hidden-state matching; every release and parity gate passes (FLEURS CER 0.0635 against 0.0637) |
+| `compress`, `train`, `evaluate`, `speed` for `recipe/sten-tts-475m.yaml` | the second rung, cut from the first to 469.6 M parameters (KL 2.858 to the full model before recovery): every gate but CER parity holds; after four recoveries FLEURS CER stays 0.0125 above the full model's (parity allows 0.0025), so it is not released |
 
 ### The v2 corpus
 
