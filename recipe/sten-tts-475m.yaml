@@ -42,7 +42,7 @@ train:                                   # stage `train`: distillation from the 
   weight_decay: 0.01
   warmup_fraction: 0.03
   batch_utterances: 16                   # per card: with the full model beside it, 32 utterances at 375 frames need ~123 GiB
-  grad_accum: 1                          # 16 x 8 cards = 128 utterances a step
+  grad_accum: 2                          # 16 x 2 x 4 cards = 128 utterances a step
   max_frames: 375
   mtp_weight: 0.3
   streaming_fraction: 0.5
