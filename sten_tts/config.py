@@ -149,7 +149,10 @@ def load(path: str | Path) -> Recipe:
         _require(live["weights"], {"f0_range", "f0_sd", "energy_sd", "syllable_rate"}, f"{path}: liveliness.weights")
     if "dataset" in raw:
         _require(raw["dataset"], {"repo", "name", "rows_per_shard"}, f"{path}: dataset")
-    _require(raw["publish"], {"repo", "private"}, f"{path}: publish", optional={"samples", "subfolder"})
+    _require(raw["publish"], {"repo", "private"}, f"{path}: publish", optional={"samples", "subfolder", "family"})
+    family = raw["publish"].get("family", [])
+    if not isinstance(family, list) or not all(isinstance(f, str) and (path.parent / f).is_file() for f in family):
+        raise RecipeError(f"{path}: publish.family must list variant recipe files beside this one")
     if "parity" in raw["evaluate"]:
         raise RecipeError(f"{path}: evaluate.parity belongs to a variant recipe (one with variant_of)")
     if "samples" in raw["publish"]:

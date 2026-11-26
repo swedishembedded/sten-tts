@@ -170,3 +170,34 @@ def test_an_ungated_variant_that_misses_parity_says_so_plainly(tmp_path: Path) -
     expected = "It is not at parity with Sten-TTS-1.7B: its FLEURS CER is 0.0125 higher (95% paired-bootstrap interval 0.0103 to 0.0150)"
     assert expected in head and expected in parity_section, "said in the description and in the parity section"
     assert "at parity with Sten-TTS-1.7B: no worse" not in card
+
+
+def test_the_full_model_card_lists_its_compact_variants_from_their_evidence(tmp_path: Path) -> None:
+    import yaml
+    raw = yaml.safe_load(RECIPE.read_text())
+    raw["publish"]["family"] = ["sten-tts-950m.yaml", "sten-tts-475m.yaml"]
+    path = RECIPE.parent / ".family-test.yaml"
+    path.write_text(yaml.safe_dump(raw))
+    try:
+        rec = config.load(path)
+    finally:
+        path.unlink()
+    work = config.Workdir(tmp_path)
+    _run_reports(work, rec)
+    for name, params, cer, delta, ci, ok, rtf in (("sten-tts-950m", 952_628_480, 0.0635, -0.0001, [-0.0031, 0.0030], True, 0.123),
+                                                  ("sten-tts-475m", 469_589_504, 0.0762, 0.0125, [0.0103, 0.0150], False, 0.110)):
+        d = work.root / "compact" / name
+        (d / "compress").mkdir(parents=True)
+        (d / "evaluation").mkdir()
+        (d / "compress" / "report.json").write_text(json.dumps({"parameters": params}))
+        (d / "evaluation" / "report.json").write_text(json.dumps({"sets": {"fleurs": {"cer": cer}}, "parity": {
+            "cer_delta": delta, "cer_delta_ci95": ci, "gates": {"cer_delta_max": {"pass": ok}, "similarity_drop_max": {"pass": True}}}}))
+        (d / "evaluation" / "speed.json").write_text(json.dumps({"variant": {"real_time_factor": rtf}}))
+    card = modelcard.model_card(rec, work, {"request": {"steps": 100}, "seconds": 7200, "result": {}})
+    section = card.split("## Compact variants")[1].split("\n## ")[0]
+    assert "| [Sten-TTS-950M](https://huggingface.co/swedishembedded/sten-tts/tree/main/sten-tts-950m) | 952.6 M | 0.064 | yes | -0.0001 (-0.0031 to +0.0030) | 0.12 |" in section
+    assert "| [Sten-TTS-475M](https://huggingface.co/swedishembedded/sten-tts/tree/main/sten-tts-475m) | 469.6 M | 0.076 | no | +0.0125 (+0.0103 to +0.0150) | 0.11 |" in section
+    (work.root / "compact" / "sten-tts-475m" / "evaluation" / "report.json").unlink()
+    import pytest
+    with pytest.raises(FileNotFoundError):
+        modelcard.model_card(rec, work, {"request": {"steps": 100}, "seconds": 7200, "result": {}})

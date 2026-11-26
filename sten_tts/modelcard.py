@@ -157,6 +157,35 @@ def _evaluation(recipe: Recipe, r: dict, name: str = "Sten-TTS") -> str:
     return "\n".join(lines) + "\n"
 
 
+def _family(recipe: Recipe, work: Workdir) -> str:
+    """The compact variants of this model (`publish.family`), each from its run's evidence under `compact/<name>/`."""
+    from . import config
+    names = recipe["publish"].get("family", [])
+    if not names:
+        return ""
+    rows = []
+    for name in names:
+        v = config.load(recipe.path.parent / name)
+        d = work.root / "compact" / v.name
+        params = json.loads((d / "compress" / "report.json").read_text())["parameters"]
+        r = json.loads((d / "evaluation" / "report.json").read_text())
+        speed = json.loads((d / "evaluation" / "speed.json").read_text())
+        par = r["parity"]
+        at = all(g["pass"] for g in par["gates"].values())
+        low, high = par["cer_delta_ci95"]
+        link = f"https://huggingface.co/{v['publish']['repo']}/tree/main/{v['publish']['subfolder']}"
+        rows.append(f"| [{v.title}]({link}) | {params / 1e6:,.1f} M | {r['sets']['fleurs']['cer']:.3f} | {'yes' if at else 'no'} | "
+                    f"{par['cer_delta']:+.4f} ({low:+.4f} to {high:+.4f}) | {speed['variant']['real_time_factor']:.2f} |")
+    title = recipe.title
+    return "\n".join(["", "## Compact variants", "",
+                      f"Smaller models cut out of {title} by weight surgery and distilled from it, each in its own folder of this "
+                      "repository with its own card. The CER difference is to " + title + " on the same FLEURS clips, with its 95% "
+                      "paired-bootstrap interval; the real-time factor is measured one request at a time on one GPU (below 1 is faster "
+                      "than real time).", "",
+                      f"| model | parameters | FLEURS CER | at parity with {title} | CER difference | real-time factor |", "|---|---|---|---|---|---|",
+                      *rows, ""])
+
+
 def model_card(recipe: Recipe, work: Workdir, train_report: dict) -> str:
     if recipe.is_variant:
         from .variantcard import variant_card
@@ -262,7 +291,7 @@ Each voice is an anonymous speaker of the NST Swedish speech database (CC0-1.0),
 their gender and region by pitch variation, loudness dynamics and speaking rate. The region is where the speaker grew
 up. The recordings are read sentences, so expect a regional accent rather than dialect.
 
-{_evaluation(recipe, evaluation) if evaluation else ""}
+{_evaluation(recipe, evaluation) if evaluation else ""}{_family(recipe, work)}
 ## Training
 
 - **Base model:** [{base['repo']}](https://huggingface.co/{base['repo']}), revision `{base['revision']}`.
