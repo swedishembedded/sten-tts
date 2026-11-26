@@ -131,7 +131,9 @@ def _evaluation(recipe: Recipe, r: dict, name: str = "Sten-TTS") -> str:
         f"{ev['judge_language']}, transcribed each clip, and the character error rate (CER, lower is better) compares "
         "that transcript with the sentence. The base model read the same sentences, cloning each voice from one of its recordings.", "",
         f"| test set | sentences | {name} | base model |", "|---|---|---|---|"]
-    lines += [f"| {SETS.get(n, (n, ''))[0]} | {sentences[n]} | **{sets[n]['cer']:.3f}** | {sets[n]['base_cer']:.3f} |" for n in names]
+    def lower_bold(a: float, b: float) -> tuple[str, str]:  # the better (lower) CER of the pair is bold
+        return (f"**{a:.3f}**", f"{b:.3f}") if a <= b else (f"{a:.3f}", f"**{b:.3f}**")
+    lines += [f"| {SETS.get(n, (n, ''))[0]} | {sentences[n]} | " + " | ".join(lower_bold(sets[n]['cer'], sets[n]['base_cer'])) + " |" for n in names]
     lines += ["", "; ".join(f"{SETS[n][0]}: {SETS[n][1]}" for n in names if n in SETS) + ".", "",
               f"- **Against the base model.** On FLEURS the CER difference, {name} minus base, is {r['paired_cer']['mean_diff']:.3f} "
               f"(95% paired-bootstrap interval {low:.3f} to {high:.3f}, n = {r['paired_cer']['n']:,} voice and sentence pairs).",
